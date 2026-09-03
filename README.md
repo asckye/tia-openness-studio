@@ -71,17 +71,21 @@ src\TiaOpenness.Gui\bin\Release\net10.0-windows\TiaOpenness.Studio.exe --mock
 The app opens a synthetic project with two devices and ten blocks. Export really writes files;
 compile really returns diagnostics. Nothing touches a real project.
 
-The desktop app follows the macOS Human Interface Guidelines - traffic lights, a unified
-toolbar, a sidebar and a segmented tab strip - and ships in **English and Chinese**. Both the
-language and the appearance (auto / light / dark, where *auto* tracks the Windows setting) are
-switched live from the title bar and remembered between runs. For a demo or a screenshot they
-can be pinned from the command line without touching the saved preference:
+The desktop app ships in **English and Chinese**, in a **light and a dark appearance** (plus
+*auto*, which tracks the Windows setting). Both are switched live - the language from the foot of
+the sidebar, the appearance from the header - and remembered between runs. For a demo or a
+screenshot they can be pinned from the command line without touching the saved preference:
 
 ```bash
 TiaOpenness.Studio.exe --mock --lang zh --theme dark
 ```
 
-![The same window in Chinese, dark appearance](docs/images/studio-dark-zh.png)
+![The same window in English, dark appearance](docs/images/studio-dark-en.png)
+
+One amber accent carries the whole interface, and it is rationed so it keeps meaning something:
+a filled amber button is the one action a row exists for, soft amber is an important action that
+is not that row's purpose, and everything else is outlined or a plain link. Paths, versions and
+counts are set in a monospace face so a backslash or an underscore is never ambiguous.
 
 ### Against a real TIA Portal
 
@@ -214,7 +218,7 @@ src/
   TiaOpenness.Client/      typed client + process management netstandard2.0
   TiaOpenness.Cli/         tia.exe                           net10.0
   TiaOpenness.Gui/         TiaOpenness.Studio.exe            net10.0-windows
-    Themes/                macOS palettes (light/dark), control templates, window chrome
+    Themes/                light/dark palettes, control templates, type ramp
     Localization/          the EN/ZH string catalogue and the {l:Tr} markup extension
   TiaOpenness.Mcp/         MCP stdio server                  net10.0
 tests/
@@ -230,6 +234,31 @@ docs/                      deployment, version control, protocol, roadmap
 
 Application code lives under `src/`, tests under `tests/`; nothing in `src/` references a test
 framework. The two trees are separate solution folders in `TiaOpenness.slnx`.
+
+## Releases
+
+Every push is built and tested on a Windows runner, and the packaged binaries are attached to the
+run as an artifact, so any branch can be tried without a local toolchain.
+
+A release is cut by pushing a version tag. The workflow builds, runs the whole suite, packages,
+and publishes the zip and its checksum to a GitHub release:
+
+```bash
+git tag -a v1.1.0 -m "..." && git push origin v1.1.0
+```
+
+The version lives in one place, `<Version>` in `Directory.Build.props`. The release job refuses to
+run if the tag disagrees with it, because a zip whose name contradicts the exe inside it is worse
+than no zip. To build the same package locally:
+
+```bash
+powershell -ExecutionPolicy Bypass -File build\publish.ps1
+```
+
+That writes `artifacts\TiaOpennessStudio-v<version>-win-x64.zip`: one self-contained single-file
+exe per front end, plus `bridge\`. The front ends carry their own .NET runtime, so the target
+machine needs no install; the bridge stays a separate .NET Framework 4.8 executable beside them,
+because that is the only runtime that can load the Openness assemblies.
 
 ## Tests
 

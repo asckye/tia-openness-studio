@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
-using TiaOpenness.Gui.Controls;
 using TiaOpenness.Gui.Localization;
 using TiaOpenness.Gui.Themes;
 using Xunit;
@@ -29,8 +28,8 @@ namespace TiaOpenness.Gui.Tests;
 [Collection(WpfCollection.Name)]
 public class MainWindowTests(WpfContext wpf)
 {
-    private const int Width = 1280;
-    private const int Height = 860;
+    private const int Width = 1400;
+    private const int Height = 880;
 
     private sealed class Rendered : IDisposable
     {
@@ -56,14 +55,19 @@ public class MainWindowTests(WpfContext wpf)
             Height = Height,
         };
 
-        host.Measure(new Size(Width, Height));
-        host.Arrange(new Rect(0, 0, Width, Height));
-        host.UpdateLayout();
+        Layout(host);
 
         var bitmap = new RenderTargetBitmap(Width, Height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(host);
 
         return new Rendered { Window = window, Host = host, Bitmap = bitmap };
+    }
+
+    private static void Layout(FrameworkElement host)
+    {
+        host.Measure(new Size(Width, Height));
+        host.Arrange(new Rect(0, 0, Width, Height));
+        host.UpdateLayout();
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
@@ -76,12 +80,26 @@ public class MainWindowTests(WpfContext wpf)
         }
     }
 
+    /// <summary>
+    /// Whether an element actually made it onto the surface.
+    ///
+    /// Not <c>IsVisible</c>: that is false for the whole tree here, because it also requires a
+    /// live PresentationSource and these tests deliberately never open a window. Size after
+    /// layout is the honest test - a collapsed element, or one inside a collapsed parent,
+    /// measures to nothing.
+    /// </summary>
+    private static bool IsShown(FrameworkElement element)
+        => element.Visibility == Visibility.Visible && element.ActualWidth > 0 && element.ActualHeight > 0;
+
     private static Color PixelAt(RenderTargetBitmap bitmap, int x, int y)
     {
         var pixel = new byte[4];
         bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
         return Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]);
     }
+
+    private static IReadOnlyList<RadioButton> Group(DependencyObject root, string name)
+        => Descendants<RadioButton>(root).Where(r => r.GroupName == name).ToList();
 
     [Fact]
     public void Loads_lays_out_and_renders_without_throwing()
@@ -103,8 +121,8 @@ public class MainWindowTests(WpfContext wpf)
             using var rendered = Render();
 
             var labels = Descendants<TextBlock>(rendered.Host).Select(t => t.Text).ToList();
-            Assert.Contains("程序块", labels);
-            Assert.Contains("版本控制", labels);
+            Assert.Contains("设备", labels);
+            Assert.Contains("尚未打开项目", labels);
         });
     }
 
@@ -124,9 +142,9 @@ public class MainWindowTests(WpfContext wpf)
         });
     }
 
-    /// <summary>The theme painted: the title bar's first pixel row is the title-bar brush.</summary>
+    /// <summary>The theme actually painted: the header's ground is the palette's header brush.</summary>
     [Fact]
-    public void The_title_bar_is_painted_with_the_palette_brush()
+    public void The_header_is_painted_with_the_palette_brush()
     {
         wpf.Run(() =>
         {
@@ -136,8 +154,8 @@ public class MainWindowTests(WpfContext wpf)
                 ThemeManager.Current.Theme = AppTheme.Light;
                 using var rendered = Render();
 
-                var expected = ((SolidColorBrush)Application.Current.FindResource("Mac.TitleBarBackground")).Color;
-                var actual = PixelAt(rendered.Bitmap, 300, 6);
+                var expected = ((SolidColorBrush)Application.Current.FindResource("Ui.HeaderBackground")).Color;
+                var actual = PixelAt(rendered.Bitmap, Width / 2, 6);
 
                 Assert.Equal(expected.R, actual.R);
                 Assert.Equal(expected.G, actual.G);
@@ -151,91 +169,141 @@ public class MainWindowTests(WpfContext wpf)
     }
 
     /// <summary>
-    /// Every button given an icon has to actually show one. The glyph is a Path inside the button
-    /// template that collapses when the icon is null; a template that reads the icon wrongly
-    /// collapses every glyph and the toolbar silently degrades to text.
+    /// Each picker is a RadioButton group, and the whole point of using RadioButtons rather than
+    /// ToggleButtons is that exactly one is always chosen. A group that renders with none checked
+    /// means its binding did not resolve.
+    /// </summary>
+    [Theory]
+    [InlineData("View", 2)]
+    [InlineData("Appearance", 3)]
+    [InlineData("Language", 2)]
+    public void Every_picker_group_has_one_and_only_one_choice(string group, int expectedSegments)
+    {
+        wpf.Run(() =>
+        {
+            using var rendered = Render();
+            var segments = Group(rendered.Host, group);
+
+            Assert.Equal(expectedSegments, segments.Count);
+            Assert.Single(segments, r => r.IsChecked == true);
+        });
+    }
+
+    [Fact]
+    public void The_view_switch_starts_on_blocks_and_swaps_the_visible_card()
+    {
+        wpf.Run(() =>
+        {
+            using var rendered = Render();
+            var model = (ViewModels.MainViewModel)rendered.Host.DataContext;
+
+            Assert.True(model.IsBlocksTab);
+
+            model.IsVcTab = true;
+            Layout(rendered.Host);
+
+            Assert.False(model.IsBlocksTab);
+
+            // The version-control view brings its own workspace picker; the blocks view has none.
+            Assert.Contains(Descendants<ComboBox>(rendered.Host), IsShown);
+        });
+    }
+
+    /// <summary>
+    /// With no session there is nothing to list, so both panes must show their explanation
+    /// rather than an empty grid with no hint of what is missing.
     /// </summary>
     [Fact]
-    public void Every_button_with_an_icon_shows_its_glyph()
+    public void Shows_its_empty_states_before_anything_is_connected()
+    {
+        wpf.RunWithLanguage(AppLanguage.English, () =>
+        {
+            using var rendered = Render();
+            var model = (ViewModels.MainViewModel)rendered.Host.DataContext;
+
+            Assert.False(model.HasDevices);
+            Assert.False(model.HasBlocks);
+
+            var visible = Descendants<TextBlock>(rendered.Host)
+                .Where(IsShown)
+                .Select(t => t.Text)
+                .ToList();
+
+            Assert.Contains(Loc.Current["Blocks.Empty.Title"], visible);
+            Assert.Contains(Loc.Current["Sidebar.Empty"], visible);
+
+            // And the grids behind them are hidden rather than merely empty.
+            Assert.DoesNotContain(Descendants<DataGrid>(rendered.Host), IsShown);
+        });
+    }
+
+    /// <summary>
+    /// The badge must not invent a version before a session has bound one, and the mode label
+    /// must stay empty until one of the two session switches is actually on.
+    /// </summary>
+    [Fact]
+    public void Reports_no_openness_version_and_no_mode_until_a_session_exists()
+    {
+        wpf.RunWithLanguage(AppLanguage.English, () =>
+        {
+            using var rendered = Render();
+            var model = (ViewModels.MainViewModel)rendered.Host.DataContext;
+
+            Assert.Equal(Loc.Current["Badge.NoVersion"], model.OpennessBadge);
+            Assert.Equal(string.Empty, model.ModeLabel);
+
+            model.UseMock = true;
+            Assert.Equal(Loc.Current["Status.MockMode"], model.ModeLabel);
+        });
+    }
+
+    [Fact]
+    public void The_log_can_be_collapsed_and_re_expanded()
     {
         wpf.Run(() =>
         {
             using var rendered = Render();
+            var model = (ViewModels.MainViewModel)rendered.Host.DataContext;
 
-            // The traffic lights also carry an icon, but through their own 7px template.
-            var trafficLight = Application.Current.FindResource("Mac.TrafficLight");
+            Assert.True(model.LogExpanded);
 
-            var iconButtons = Descendants<Button>(rendered.Host)
-                .Where(b => Ux.GetIcon(b) is not null && b.Style != trafficLight)
+            model.ToggleLog();
+            Layout(rendered.Host);
+            Assert.False(model.LogExpanded);
+
+            model.ToggleLog();
+            Layout(rendered.Host);
+            Assert.True(model.LogExpanded);
+        });
+    }
+
+    /// <summary>
+    /// Every button is drawn by one shared template. If a style ever loses it, the button falls
+    /// back to the stock WPF chrome and quietly stops matching the rest of the window, so the
+    /// check is that each one really is using the theme's template.
+    /// </summary>
+    [Fact]
+    public void Every_button_uses_the_themed_template_and_has_a_size()
+    {
+        wpf.Run(() =>
+        {
+            using var rendered = Render();
+            var themed = (ControlTemplate)Application.Current.FindResource("Ui.ButtonTemplate");
+
+            var buttons = Descendants<ButtonBase>(rendered.Host)
+                .Where(IsShown)
+                .Where(b => b is Button or RadioButton)
+                // The language switch is text-only and has a template of its own.
+                .Where(b => (b as RadioButton)?.GroupName != "Language")
                 .ToList();
 
-            Assert.True(iconButtons.Count >= 8, "expected the toolbar and browse buttons to carry icons");
+            Assert.True(buttons.Count >= 12, "only found " + buttons.Count + " buttons");
 
-            foreach (var button in iconButtons)
+            foreach (var button in buttons)
             {
-                var label = button.Content as string ?? button.ToolTip as string ?? "(icon-only button)";
-                var glyph = Descendants<Path>(button).FirstOrDefault(p => p.Name == "Glyph");
-
-                Assert.NotNull(glyph);
-                Assert.Equal(Visibility.Visible, glyph.Visibility);
-                Assert.NotNull(glyph.Data);
-                Assert.NotNull(glyph.Stroke);
-                Assert.True(glyph.ActualWidth >= 16, label + ": glyph has no width");
+                Assert.Same(themed, button.Template);
+                Assert.True(button.ActualHeight >= 22, button.Content + " has no height");
             }
-        });
-    }
-
-    /// <summary>And, the other way round, a text-only button must not reserve space for one.</summary>
-    [Fact]
-    public void A_button_without_an_icon_collapses_the_glyph()
-    {
-        wpf.Run(() =>
-        {
-            using var rendered = Render();
-
-            var plain = Descendants<Button>(rendered.Host)
-                .Where(b => Ux.GetIcon(b) is null && b.Content is string)
-                .ToList();
-
-            Assert.NotEmpty(plain);
-
-            foreach (var button in plain)
-            {
-                var glyph = Descendants<Path>(button).FirstOrDefault(p => p.Name == "Glyph");
-                if (glyph is null) continue; // traffic lights use their own template
-                Assert.Equal(Visibility.Collapsed, glyph.Visibility);
-            }
-        });
-    }
-
-    [Fact]
-    public void The_traffic_lights_are_present_and_coloured()
-    {
-        wpf.Run(() =>
-        {
-            using var rendered = Render();
-
-            var lights = Descendants<Button>(rendered.Host)
-                .Where(b => b.Style == Application.Current.FindResource("Mac.TrafficLight"))
-                .ToList();
-
-            Assert.Equal(3, lights.Count);
-            Assert.All(lights, light => Assert.IsType<SolidColorBrush>(light.Background));
-            Assert.Equal(3, lights.Select(l => ((SolidColorBrush)l.Background).Color).Distinct().Count());
-        });
-    }
-
-    [Fact]
-    public void The_tab_strip_offers_blocks_and_version_control()
-    {
-        wpf.Run(() =>
-        {
-            using var rendered = Render();
-
-            var tabs = Descendants<TabControl>(rendered.Host).Single();
-
-            Assert.Equal(2, tabs.Items.Count);
-            Assert.Equal(0, tabs.SelectedIndex);
         });
     }
 }

@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Data;
@@ -57,12 +58,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _log = string.Empty;
     private string _blockFilter = string.Empty;
     private string _namePattern = "^(OB|FB|FC|DB|UDT)_";
+    private string? _opennessVersion;
     private DeviceInfo? _selectedDevice;
     private bool _useMock;
     private bool _headless;
     private bool _sourceFormat;
     private bool _busy;
     private bool _isConnected;
+    private bool _isVcTab;
+    private bool _logExpanded = true;
     private int _progressValue;
     private int _progressMax;
 
@@ -79,7 +83,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BlocksView = CollectionViewSource.GetDefaultView(Blocks);
         BlocksView.Filter = FilterBlock;
 
-        Devices.CollectionChanged += OnDevicesChanged;
+        Devices.CollectionChanged += (_, _) => Raise(nameof(HasDevices));
+        Blocks.CollectionChanged += OnBlocksChanged;
+        VcStatusItems.CollectionChanged += (_, _) => Raise(nameof(HasVcItems));
 
         // Anything shown as text but stored as a key has to be re-read when the language flips.
         Loc.Current.LanguageChanged += OnLanguageChanged;
@@ -125,14 +131,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        Raise(nameof(Status));
-        Raise(nameof(SelectionSummary));
-        Raise(nameof(WorkspaceRootDisplay));
+        foreach (var name in new[]
+                 {
+                     nameof(Status), nameof(SelectionSummary), nameof(WorkspaceRootDisplay),
+                     nameof(OpennessBadge), nameof(ModeLabel), nameof(LogToggleLabel),
+                 })
+        {
+            Raise(name);
+        }
+
         foreach (var row in Blocks) row.RefreshLocalizedText();
     }
 
-    private void OnDevicesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => Raise(nameof(HasNoDevices));
+    private void OnBlocksChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Raise(nameof(HasBlocks));
+        Raise(nameof(SelectionSummary));
+    }
 
     // ---- bindable state ----------------------------------------------------
 
@@ -160,13 +175,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncCommand VcPush { get; }
     public AsyncCommand VcPull { get; }
 
+    /// <summary>Shown at the foot of the sidebar, from the assembly the app was built as.</summary>
+    public static string AppVersion { get; } =
+        "v" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
+
+    /// <summary>
+    /// The pill beside the product name. Before a session exists there is nothing truthful to
+    /// put there, so it shows a dash rather than guessing at an installed version.
+    /// </summary>
+    public string OpennessBadge => _opennessVersion is null
+        ? Loc.Current["Badge.NoVersion"]
+        : Loc.Current.T("Badge.Version", _opennessVersion);
+
     public string ProjectPath
     {
         get => _projectPath;
         set { if (Set(ref _projectPath, value)) OpenProject.RaiseCanExecuteChanged(); }
     }
 
-    /// <summary>Shown beside the app name in the title bar, the way macOS names the document.</summary>
     public string ProjectName { get => _projectName; private set => Set(ref _projectName, value); }
 
     public string OutputDirectory
@@ -177,17 +203,95 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string Status => _status.Resolve();
 
-    public string Log { get => _log; private set => Set(ref _log, value); }
+    public string Log
+    {
+        get => _log;
+        private set
+        {
+            if (!Set(ref _log, value)) return;
+            Raise(nameof(HasLog));
+            Raise(nameof(LogLineCount));
+        }
+    }
+
     public string NamePattern { get => _namePattern; set => Set(ref _namePattern, value); }
-    public bool UseMock { get => _useMock; set => Set(ref _useMock, value); }
-    public bool Headless { get => _headless; set => Set(ref _headless, value); }
     public bool SourceFormat { get => _sourceFormat; set => Set(ref _sourceFormat, value); }
-    public bool Busy { get => _busy; private set => Set(ref _busy, value); }
     public bool IsConnected { get => _isConnected; private set => Set(ref _isConnected, value); }
     public int ProgressValue { get => _progressValue; private set => Set(ref _progressValue, value); }
     public int ProgressMax { get => _progressMax; private set => Set(ref _progressMax, value); }
 
-    public bool HasNoDevices => Devices.Count == 0;
+    public bool Busy { get => _busy; private set => Set(ref _busy, value); }
+
+    public bool UseMock
+    {
+        get => _useMock;
+        set { if (Set(ref _useMock, value)) Raise(nameof(ModeLabel)); }
+    }
+
+    public bool Headless
+    {
+        get => _headless;
+        set { if (Set(ref _headless, value)) Raise(nameof(ModeLabel)); }
+    }
+
+    /// <summary>
+    /// The right-hand end of the status bar: which of the two session modes is in force, if
+    /// either. Mock wins when both are set, because it is the one that decides whether anything
+    /// real is touched at all.
+    /// </summary>
+    public string ModeLabel
+    {
+        get
+        {
+            if (UseMock) return Loc.Current["Status.MockMode"];
+            return Headless ? Loc.Current["Status.HeadlessMode"] : string.Empty;
+        }
+    }
+
+    public bool HasDevices => Devices.Count > 0;
+    public bool HasBlocks => Blocks.Count > 0;
+    public bool HasVcItems => VcStatusItems.Count > 0;
+    public bool HasLog => Log.Length > 0;
+
+    public int LogLineCount => Log.Length == 0 ? 0 : Log.Count(c => c == '\n');
+
+    /// <summary>Collapsing the log gives the table the whole pane on a small screen.</summary>
+    public bool LogExpanded
+    {
+        get => _logExpanded;
+        private set { if (Set(ref _logExpanded, value)) Raise(nameof(LogToggleLabel)); }
+    }
+
+    public string LogToggleLabel
+    {
+        // Written out rather than as a ternary so both keys sit literally at a call site, which
+        // is what SourceConsistencyTests scans for when it checks the catalogue has no dead entries.
+        get
+        {
+            if (LogExpanded) return Loc.Current["Log.Collapse"];
+            return Loc.Current["Log.Expand"];
+        }
+    }
+
+    public void ToggleLog() => LogExpanded = !LogExpanded;
+
+    // The two views are one choice, so they are one field with two bindable faces; a pair of
+    // independent bools would let both be false and show neither view.
+    public bool IsVcTab
+    {
+        get => _isVcTab;
+        set
+        {
+            if (!Set(ref _isVcTab, value)) return;
+            Raise(nameof(IsBlocksTab));
+        }
+    }
+
+    public bool IsBlocksTab
+    {
+        get => !_isVcTab;
+        set { if (value) IsVcTab = false; }
+    }
 
     public string BlockFilter
     {
@@ -257,8 +361,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var selected = Blocks.Count(b => b.Selected);
             return selected == 0
-                ? Loc.Current.T("Blocks.Summary.None", Blocks.Count)
-                : Loc.Current.T("Blocks.Summary.Some", selected, Blocks.Count);
+                ? Loc.Current.T("Blocks.Count", Blocks.Count)
+                : Loc.Current.T("Blocks.Selected", selected, Blocks.Count);
         }
     }
 
@@ -290,6 +394,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         EnsureBridge();
         var state = await _client.ConnectAsync(!Headless);
         IsConnected = true;
+        SetOpennessVersion(state.OpennessVersion);
         SetStatus("Status.Connected", state.Mode, state.OpennessVersion);
 
         // Attaching to a running TIA inherits whatever project it already had open.
@@ -301,6 +406,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             await LoadDevicesAsync();
         }
     });
+
+    private void SetOpennessVersion(string? version)
+    {
+        _opennessVersion = string.IsNullOrWhiteSpace(version) ? null : "V" + version;
+        Raise(nameof(OpennessBadge));
+    }
 
     private async Task OpenProjectAsync() => await Guarded("Status.OpeningProject", async () =>
     {
@@ -341,7 +452,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 row.PropertyChanged += OnRowChanged;
                 Blocks.Add(row);
             }
-            Raise(nameof(SelectionSummary));
             SetStatus("Status.BlocksIn", blocks.Count, deviceId);
         }, deviceId);
     }
@@ -707,15 +817,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }, direction);
 
     /// <summary>
-    /// Applies command-line startup options: <c>--mock</c> to use the synthetic backend and
-    /// <c>--project &lt;path&gt;</c> to open one immediately. Lets the app be demonstrated, and
-    /// screenshotted, without a TIA Portal installation.
+    /// Applies command-line startup options: <c>--mock</c> to use the synthetic backend,
+    /// <c>--project &lt;path&gt;</c> to open one immediately and <c>--tab</c> to land on a view.
+    /// Lets the app be demonstrated, and screenshotted, without a TIA Portal installation.
     /// </summary>
     public async Task ApplyStartupAsync(string[] args)
     {
         if (args.Any(a => string.Equals(a, "--mock", StringComparison.OrdinalIgnoreCase)))
         {
             UseMock = true;
+        }
+
+        var tab = Array.FindIndex(args, a => string.Equals(a, "--tab", StringComparison.OrdinalIgnoreCase));
+        if (tab >= 0 && tab + 1 < args.Length)
+        {
+            IsVcTab = args[tab + 1].ToLowerInvariant() is "vc" or "version-control";
         }
 
         var index = Array.FindIndex(args, a => string.Equals(a, "--project", StringComparison.OrdinalIgnoreCase));

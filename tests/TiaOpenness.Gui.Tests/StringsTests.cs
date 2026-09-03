@@ -94,7 +94,10 @@ public class StringsTests
     {
         string[] allowedToBeIdentical =
         [
-            "App.Title", "Lang.English", "Lang.Chinese", "Status.Working",
+            // A product name, a monogram, a version pill and two format frames: none of these is
+            // prose, so translating them would be inventing a difference rather than removing one.
+            "App.Title", "App.Monogram", "Badge.NoVersion", "Badge.Version",
+            "Lang.English", "Lang.Chinese", "Status.Working",
         ];
 
         var untranslated = Strings.Catalogue

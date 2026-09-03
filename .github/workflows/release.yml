@@ -1,0 +1,79 @@
+# Cut a release from a version tag: test, package, and publish the zip as a GitHub release.
+#
+#   git tag -a v1.1.0 -m "..." && git push origin v1.1.0
+#
+# The tag is the trigger and the single source of the version: the job refuses to run if the tag
+# does not match <Version> in Directory.Build.props, because a zip whose name disagrees with the
+# exe inside it is worse than no zip at all.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, e.g. v1.1.0"
+        required: true
+
+permissions:
+  contents: write      # needed to create the release and upload its assets
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Resolve and verify the version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = if ($env:INPUT_TAG) { $env:INPUT_TAG } else { "${{ github.ref_name }}" }
+          $version = $tag.TrimStart('v')
+
+          $declared = [regex]::Match(
+            (Get-Content Directory.Build.props -Raw), '<Version>([^<]+)</Version>').Groups[1].Value.Trim()
+
+          if ($declared -ne $version) {
+            throw "Tag $tag says $version but Directory.Build.props says $declared. Bump one of them."
+          }
+
+          "tag=$tag"         | Out-File -Append $env:GITHUB_OUTPUT
+          "version=$version" | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "Releasing $tag (version $version)"
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+
+      - name: Build
+        run: dotnet build TiaOpenness.slnx -c Release
+
+      # A release that fails its own tests is not a release.
+      - name: Test
+        run: dotnet test TiaOpenness.slnx -c Release --no-build
+
+      - name: Package
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build/publish.ps1
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: TIA Openness Studio ${{ steps.version.outputs.tag }}
+          # Keep whatever notes the tag or an earlier draft already carries, and let GitHub add
+          # the commit list underneath rather than hand-maintaining one here.
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/*.zip
+            artifacts/*.sha256

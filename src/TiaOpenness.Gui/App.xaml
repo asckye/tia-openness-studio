@@ -1,6 +1,7 @@
 <Application x:Class="TiaOpenness.Gui.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ux="clr-namespace:TiaOpenness.Gui.Controls"
              StartupUri="MainWindow.xaml">
   <Application.Resources>
     <ResourceDictionary>
@@ -19,13 +20,14 @@
       </ResourceDictionary.MergedDictionaries>
 
       <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+      <ux:InverseBooleanToVisibilityConverter x:Key="NotBoolToVisibility" />
 
       <!-- There is deliberately no implicit TextBlock style here. Foreground, FontFamily and
            FontSize are all the same inheritable properties on Control and TextElement, so the
            values set on the window reach every TextBlock on their own - and, more importantly,
            a selected list row can override them for its children. An implicit style setter
-           would outrank that inheritance and leave selected rows with unreadable dark text on
-           the blue selection fill. -->
+           would outrank that inheritance and leave selected rows with unreadable text on the
+           selection fill. -->
     </ResourceDictionary>
   </Application.Resources>
 </Application>

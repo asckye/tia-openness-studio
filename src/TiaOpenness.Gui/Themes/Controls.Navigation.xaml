@@ -1,81 +1,59 @@
 <!--
-  Tabs, progress, splitters and tooltips.
+  Containers, progress, splitters and tooltips.
 
-  macOS shows a tab view's tabs as a centred segmented control sitting above the content, not as
-  a row of folder tabs stuck to the left edge. Keeping the stock TabControl underneath means
-  keyboard navigation and the SelectedIndex the startup switch "tab" drives still work.
+  There is deliberately no TabControl style here: the tab strip in the header is a group of
+  RadioButtons (Ui.Tab) driving a content switch, because the strip shares its row with unrelated
+  buttons and a TabControl would insist on owning that whole row.
 -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:ux="clr-namespace:TiaOpenness.Gui.Controls">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- ===================== tab view ===================== -->
-  <Style x:Key="Mac.TabItem" TargetType="TabItem">
-    <Setter Property="FontFamily" Value="{DynamicResource Mac.Font}" />
-    <Setter Property="FontSize" Value="{DynamicResource Mac.FontSize.Body}" />
-    <Setter Property="Foreground" Value="{DynamicResource Mac.SecondaryLabel}" />
-    <Setter Property="Padding" Value="16,4" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="TabItem">
-          <Border x:Name="Chrome" Background="Transparent" CornerRadius="5"
-                  Padding="{TemplateBinding Padding}" Margin="0" SnapsToDevicePixels="True">
-            <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
-                              HorizontalAlignment="Center" RecognizesAccessKey="True" />
-          </Border>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsSelected" Value="True">
-              <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Mac.SegmentThumb}" />
-              <Setter Property="Foreground" Value="{DynamicResource Mac.Label}" />
-              <Setter Property="FontWeight" Value="Medium" />
-            </Trigger>
-            <MultiTrigger>
-              <MultiTrigger.Conditions>
-                <Condition Property="IsSelected" Value="False" />
-                <Condition Property="IsMouseOver" Value="True" />
-              </MultiTrigger.Conditions>
-              <Setter Property="Foreground" Value="{DynamicResource Mac.Label}" />
-            </MultiTrigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
+  <!-- ===================== containers ===================== -->
+
+  <!-- The white, hairline-bordered panel most content sits in. -->
+  <Style x:Key="Ui.Card" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Ui.CardBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Ui.Separator}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
   </Style>
 
-  <Style TargetType="TabItem" BasedOn="{StaticResource Mac.TabItem}" />
-
-  <Style TargetType="TabControl">
+  <!-- A strip inside a card, separated by a hairline: the filter row above the table and the
+       export row below it. -->
+  <Style x:Key="Ui.CardBand" TargetType="Border">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="TabControl">
-          <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+    <Setter Property="BorderBrush" Value="{DynamicResource Ui.Separator}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+  </Style>
 
-            <Border Grid.Row="0" Style="{DynamicResource Mac.SegmentBar}"
-                    HorizontalAlignment="Center" Margin="0,2,0,12">
-              <TabPanel IsItemsHost="True" Panel.ZIndex="1" />
-            </Border>
+  <!-- The dashed placeholder shown where a list will appear once there is something to list. -->
+  <Style x:Key="Ui.Placeholder" TargetType="Border">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Ui.DashedBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="20,28" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+  </Style>
 
-            <Border Grid.Row="1" Background="{TemplateBinding Background}">
-              <ContentPresenter ContentSource="SelectedContent" Margin="{TemplateBinding Padding}" />
-            </Border>
-          </Grid>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
+  <!-- A thin vertical rule between groups of controls in a row. -->
+  <Style x:Key="Ui.VerticalRule" TargetType="Rectangle">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="Fill" Value="{DynamicResource Ui.Separator}" />
+    <Setter Property="Margin" Value="10,0,12,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="SnapsToDevicePixels" Value="True" />
   </Style>
 
   <!-- ===================== progress ===================== -->
   <Style TargetType="ProgressBar">
     <Setter Property="Height" Value="6" />
-    <Setter Property="Foreground" Value="{DynamicResource Mac.Accent}" />
-    <Setter Property="Background" Value="{DynamicResource Mac.SegmentTrack}" />
+    <Setter Property="Foreground" Value="{DynamicResource Ui.Accent}" />
+    <Setter Property="Background" Value="{DynamicResource Ui.SegmentTrack}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Template">
       <Setter.Value>
@@ -93,8 +71,7 @@
   </Style>
 
   <!-- ===================== splitter ===================== -->
-  <!-- macOS splitters are invisible until you point at them; the panes' own edges do the
-       separating. -->
+  <!-- Invisible until pointed at; the panes' own edges do the separating. -->
   <Style TargetType="GridSplitter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -102,13 +79,13 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="GridSplitter">
-          <Border x:Name="Chrome" Background="Transparent">
+          <Border Background="Transparent">
             <Border x:Name="Line" Background="Transparent" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Line" Property="Background" Value="{DynamicResource Mac.Accent}" />
-              <Setter TargetName="Line" Property="Opacity" Value="0.5" />
+              <Setter TargetName="Line" Property="Background" Value="{DynamicResource Ui.Accent}" />
+              <Setter TargetName="Line" Property="Opacity" Value="0.45" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -126,45 +103,25 @@
 
   <!-- ===================== tooltip ===================== -->
   <Style TargetType="ToolTip">
-    <Setter Property="Foreground" Value="{DynamicResource Mac.Label}" />
-    <Setter Property="FontFamily" Value="{DynamicResource Mac.Font}" />
-    <Setter Property="FontSize" Value="{DynamicResource Mac.FontSize.Small}" />
-    <Setter Property="MaxWidth" Value="320" />
+    <Setter Property="Foreground" Value="{DynamicResource Ui.Label}" />
+    <Setter Property="FontFamily" Value="{DynamicResource Ui.Font}" />
+    <Setter Property="FontSize" Value="{DynamicResource Ui.FontSize.Small}" />
+    <Setter Property="MaxWidth" Value="340" />
     <Setter Property="HasDropShadow" Value="False" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ToolTip">
-          <Border Background="{DynamicResource Mac.CardBackground}"
-                  BorderBrush="{DynamicResource Mac.Separator}"
-                  BorderThickness="1" CornerRadius="6" Padding="9,6">
+          <Border Background="{DynamicResource Ui.CardBackground}"
+                  BorderBrush="{DynamicResource Ui.Separator}"
+                  BorderThickness="1" CornerRadius="8" Padding="10,7">
             <Border.Effect>
-              <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Direction="270" />
+              <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.16" Direction="270" />
             </Border.Effect>
             <ContentPresenter />
           </Border>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
-  </Style>
-
-  <!-- ===================== card ===================== -->
-  <!-- The rounded, hairline-bordered container macOS groups content in. -->
-  <Style x:Key="Mac.Card" TargetType="Border">
-    <Setter Property="Background" Value="{DynamicResource Mac.CardBackground}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Mac.Separator}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="10" />
-    <Setter Property="SnapsToDevicePixels" Value="True" />
-  </Style>
-
-  <!-- A thin vertical rule between groups of toolbar buttons. -->
-  <Style x:Key="Mac.ToolbarSeparator" TargetType="Rectangle">
-    <Setter Property="Width" Value="1" />
-    <Setter Property="Height" Value="18" />
-    <Setter Property="Fill" Value="{DynamicResource Mac.Separator}" />
-    <Setter Property="Margin" Value="8,0,10,0" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="SnapsToDevicePixels" Value="True" />
   </Style>
 
 </ResourceDictionary>

@@ -17,31 +17,31 @@ internal static class Strings
     internal static readonly (string Key, string En, string Zh)[] Catalogue =
     [
         // ---- shell -----------------------------------------------------------------
-        ("App.Title",                  "TIA Openness Studio", "TIA Openness Studio"),
-        ("Chrome.Close",               "Close", "关闭"),
-        ("Chrome.Minimize",            "Minimize", "最小化"),
-        ("Chrome.Zoom",                "Zoom", "缩放"),
+        ("App.Title",                  "Openness Studio", "Openness Studio"),
+        ("App.Monogram",               "OS", "OS"),
+        ("Badge.NoVersion",            "TIA —", "TIA —"),
+        ("Badge.Version",              "TIA {0}", "TIA {0}"),
+        ("Theme.Light",                "Light", "浅色"),
+        ("Theme.Dark",                 "Dark", "深色"),
+        ("Theme.Auto",                 "Auto", "自动"),
+        ("Theme.Switch",               "Appearance", "外观"),
         ("Lang.Switch",                "Language", "语言"),
         ("Lang.English",               "EN", "EN"),
         ("Lang.Chinese",               "中文", "中文"),
-        ("Theme.Switch",               "Appearance", "外观"),
-        ("Theme.Auto",                 "Auto", "自动"),
-        ("Theme.Light",                "Light", "浅色"),
-        ("Theme.Dark",                 "Dark", "深色"),
 
-        // ---- toolbar ---------------------------------------------------------------
+        // ---- header actions --------------------------------------------------------
+        ("Toolbar.Mock",               "Mock", "模拟"),
+        ("Toolbar.Mock.Tip",           "Run against a synthetic project; no TIA Portal needed",
+                                       "使用合成项目运行,无需安装 TIA Portal"),
+        ("Toolbar.Headless",           "Headless", "无界面"),
+        ("Toolbar.Headless.Tip",       "Start TIA Portal without its window. It cannot show the first-connect trust dialog.",
+                                       "以无窗口方式启动 TIA Portal。它无法显示首次连接的信任对话框。"),
         ("Toolbar.Doctor",             "Doctor", "环境检查"),
         ("Toolbar.Doctor.Tip",         "Check every Openness precondition on this machine",
                                        "检查本机是否满足 Openness 的全部前置条件"),
         ("Toolbar.Connect",            "Connect", "连接"),
         ("Toolbar.Connect.Tip",        "Start TIA Portal, or attach to one that is already running",
                                        "启动 TIA Portal,或附加到已在运行的实例"),
-        ("Toolbar.Mock",               "Mock", "模拟"),
-        ("Toolbar.Mock.Tip",           "Run against a synthetic project; no TIA Portal needed",
-                                       "使用合成项目运行,无需安装 TIA Portal"),
-        ("Toolbar.Headless",           "Headless", "无界面"),
-        ("Toolbar.Headless.Tip",       "Start TIA Portal without its window. Cannot show the first-connect trust dialog.",
-                                       "以无窗口方式启动 TIA Portal。它无法显示首次连接的信任对话框。"),
         ("Toolbar.Compile",            "Compile", "编译"),
         ("Toolbar.Inspect",            "Inspect", "审查"),
         ("Toolbar.Import",             "Import…", "导入…"),
@@ -51,8 +51,8 @@ internal static class Strings
 
         // ---- project row -----------------------------------------------------------
         ("Project.Label",              "Project", "项目"),
-        ("Project.Placeholder",        "Path to an .ap21 … .ap15_1 project file",
-                                       ".ap21 … .ap15_1 项目文件的路径"),
+        ("Project.Placeholder",        "Path to an .ap15_1 … .ap21 project file",
+                                       ".ap15_1 / .ap21 项目文件的路径"),
         ("Common.Browse",              "Browse…", "浏览…"),
         ("Common.Open",                "Open", "打开"),
         ("Common.All",                 "All", "全选"),
@@ -61,8 +61,8 @@ internal static class Strings
 
         // ---- sidebar ---------------------------------------------------------------
         ("Sidebar.Devices",            "Devices", "设备"),
-        ("Sidebar.Empty",              "Connect and open a project to list its devices.",
-                                       "连接并打开项目后即可列出设备。"),
+        ("Sidebar.Empty",              "Devices will be listed here once you connect and open a project.",
+                                       "连接并打开项目后\n此处将列出设备"),
 
         // ---- tabs ------------------------------------------------------------------
         ("Tab.Blocks",                 "Blocks", "程序块"),
@@ -70,14 +70,16 @@ internal static class Strings
 
         // ---- blocks ----------------------------------------------------------------
         ("Blocks.Filter",              "Filter by path", "按路径筛选"),
+        ("Blocks.Count",               "{0} block(s)", "共 {0} 个程序块"),
+        ("Blocks.Selected",            "{0} of {1} selected", "已选择 {0}/{1}"),
+        ("Blocks.Empty.Title",         "No project open", "尚未打开项目"),
+        ("Blocks.Empty.Body",          "Connect to TIA Portal at the top right, then enter a project path and open it. The blocks will be listed here, ready to filter, select and export.",
+                                       "先在右上角连接 TIA Portal,再输入项目路径并打开。打开后程序块将在此列出,可筛选、多选并导出。"),
         ("Blocks.ExportTo",            "Export to", "导出到"),
         ("Blocks.SourceFormat",        "Source (.scl)", "源文本 (.scl)"),
         ("Blocks.SourceFormat.Tip",    "Text export instead of SimaticML .xml. Only works for textual languages.",
                                        "导出为文本而非 SimaticML .xml,仅适用于文本类编程语言。"),
         ("Blocks.Export",              "Export", "导出"),
-        ("Blocks.Summary.None",        "{0} block(s); none selected — export will take all of them",
-                                       "共 {0} 个程序块;未选择任何块,导出时将包含全部"),
-        ("Blocks.Summary.Some",        "{0} of {1} block(s) selected", "已选择 {0}/{1} 个程序块"),
         ("Col.Path",                   "Path", "路径"),
         ("Col.Kind",                   "Kind", "类型"),
         ("Col.Number",                 "No.", "编号"),
@@ -110,6 +112,9 @@ internal static class Strings
         ("Vc.Pull",                    "← Pull", "← 拉取"),
         ("Vc.Pull.Tip",                "Read the text files back into the project. Overwrites blocks.",
                                        "把文本文件读回项目,会覆盖程序块。"),
+        ("Vc.Empty.Title",             "No workspace yet", "尚无工作区"),
+        ("Vc.Empty.Body",              "The Version Control Interface maps the project onto a folder, one text file per object. It needs TIA Portal V21 or later.",
+                                       "版本控制接口会把项目映射到一个文件夹,每个对象一个文本文件。该功能需要 TIA Portal V21 及以上。"),
         ("Col.State",                  "State", "状态"),
         ("Col.Object",                 "Object", "对象"),
         ("Col.Format",                 "Format", "格式"),
@@ -118,9 +123,14 @@ internal static class Strings
         ("Log.Title",                  "Log", "日志"),
         ("Log.Copy",                   "Copy", "复制"),
         ("Log.Clear",                  "Clear", "清空"),
+        ("Log.Collapse",               "Collapse", "收起"),
+        ("Log.Expand",                 "Expand", "展开"),
+        ("Log.Empty",                  "No log yet.", "暂无日志。"),
 
-        // ---- status line -----------------------------------------------------------
-        ("Status.NotConnected",        "Not connected.", "未连接。"),
+        // ---- status bar ------------------------------------------------------------
+        ("Status.NotConnected",        "Not connected.", "未连接"),
+        ("Status.HeadlessMode",        "Headless mode", "无界面模式"),
+        ("Status.MockMode",            "Mock mode", "模拟模式"),
         ("Status.Working",             "{0}…", "{0}…"),
         ("Status.CheckingEnvironment", "Checking environment", "正在检查环境"),
         ("Status.Connecting",          "Connecting to TIA Portal", "正在连接 TIA Portal"),

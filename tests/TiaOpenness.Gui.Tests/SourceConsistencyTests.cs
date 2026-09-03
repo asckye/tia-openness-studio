@@ -33,7 +33,7 @@ public class SourceConsistencyTests(WpfContext wpf)
         new(@"LocalizedText\.(?:Key|Working)\(""([A-Za-z][\w.]*)""", RegexOptions.Compiled),
     ];
 
-    // {StaticResource Mac.Button} / {DynamicResource Mac.Accent}
+    // {StaticResource Ui.Button} / {DynamicResource Ui.Accent}
     private static readonly Regex ResourceKey =
         new(@"\{(?:Static|Dynamic)Resource\s+([A-Za-z][\w.]*)\s*\}", RegexOptions.Compiled);
 
