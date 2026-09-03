@@ -11,6 +11,9 @@ obj/
 # runtime artefacts
 *.crash.log
 
+# release packages produced by build/publish.ps1
+artifacts/
+
 # Siemens assemblies are not redistributable; fetch them with tools/fetch-openness-dlls.ps1
 lib/*.dll
 lib/OPENNESS_VERSION.txt

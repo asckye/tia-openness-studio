@@ -35,6 +35,19 @@ public partial class MainWindow : Window
         };
     }
 
+    // ---- window buttons ----------------------------------------------------
+    // WindowStyle=None removed the system caption, so close, minimise and zoom are ours to
+    // implement. Dragging, double-click-to-zoom and Aero Snap still come from WindowChrome.
+
+    private void OnClose(object sender, RoutedEventArgs e) => Close();
+
+    private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnZoom(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    // ---- browse buttons ----------------------------------------------------
+
     private void OnBrowseProject(object sender, RoutedEventArgs e) => _model.BrowseProject();
 
     private void OnBrowseOutput(object sender, RoutedEventArgs e) => _model.BrowseOutput();
@@ -45,9 +58,26 @@ public partial class MainWindow : Window
 
     private void OnSelectNone(object sender, RoutedEventArgs e) => _model.SelectAll(false);
 
+    // ---- log ---------------------------------------------------------------
+
     /// <summary>Keeps the log pinned to the newest line as it grows.</summary>
     private void OnLogChanged(object sender, TextChangedEventArgs e)
     {
         if (sender is TextBox box) box.ScrollToEnd();
     }
+
+    private void OnCopyLog(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(_model.Log);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // The clipboard is a shared OS resource and another process can hold it open.
+            // Failing to copy a log is not worth an error dialog.
+        }
+    }
+
+    private void OnClearLog(object sender, RoutedEventArgs e) => _model.ClearLog();
 }

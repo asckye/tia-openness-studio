@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Matches the code under test: TiaOpenness.Core is pinned to .NET Framework 4.8 because
+         the Openness assemblies it sits behind cannot be loaded by modern .NET. -->
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>TiaOpenness.Core.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TiaOpenness.Core\TiaOpenness.Core.csproj" />
+  </ItemGroup>
+</Project>

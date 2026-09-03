@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TiaOpenness.Gui.Tests</RootNamespace>
+    <AssemblyName>TiaOpenness.Gui.Tests</AssemblyName>
+    <RollForward>LatestMajor</RollForward>
+
+    <!-- The bridge is a .NET Framework executable copied next to the front end at build time.
+         These tests never start a session, so skip that copy and keep the test build fast. -->
+    <SkipBridgeDeploy>true</SkipBridgeDeploy>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TiaOpenness.Gui\TiaOpenness.Gui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The UI's own source is embedded so the consistency tests can read every catalogue key
+         and resource name it actually uses, rather than a copy in the test project that would
+         drift from it. Markup carries {l:Tr ...} and {DynamicResource ...}; the code carries the
+         status and log keys, which never appear in XAML at all. -->
+    <EmbeddedResource Include="..\..\src\TiaOpenness.Gui\**\*.xaml;..\..\src\TiaOpenness.Gui\**\*.cs"
+                      Exclude="..\..\src\TiaOpenness.Gui\bin\**;..\..\src\TiaOpenness.Gui\obj\**"
+                      LinkBase="Source" />
+  </ItemGroup>
+</Project>

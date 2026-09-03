@@ -1,0 +1,70 @@
+<!--
+  macOS light appearance.
+
+  Values follow Apple's Human Interface Guidelines system colours rather than being eyeballed,
+  so the two palettes stay in the same relationship to each other as the real thing: the same
+  token means the same role in both, and only this file and Palette.Dark.xaml know any hex.
+  Everything downstream refers to these by DynamicResource, which is what lets the appearance
+  switch without rebuilding the window.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- accent: systemBlue -->
+  <SolidColorBrush x:Key="Mac.Accent" Color="#007AFF" />
+  <SolidColorBrush x:Key="Mac.AccentHover" Color="#1A86FF" />
+  <SolidColorBrush x:Key="Mac.AccentPressed" Color="#0062CC" />
+  <SolidColorBrush x:Key="Mac.OnAccent" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.AccentSubtle" Color="#E5F0FF" />
+
+  <!-- surfaces -->
+  <SolidColorBrush x:Key="Mac.WindowBackground" Color="#ECECEC" />
+  <SolidColorBrush x:Key="Mac.TitleBarBackground" Color="#E8E8E8" />
+  <SolidColorBrush x:Key="Mac.SidebarBackground" Color="#F1F1F3" />
+  <SolidColorBrush x:Key="Mac.ContentBackground" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.CardBackground" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.CodeBackground" Color="#FAFAFA" />
+  <SolidColorBrush x:Key="Mac.RowAlternate" Color="#F7F7F8" />
+
+  <!-- text -->
+  <SolidColorBrush x:Key="Mac.Label" Color="#000000" Opacity="0.85" />
+  <SolidColorBrush x:Key="Mac.SecondaryLabel" Color="#3C3C43" Opacity="0.60" />
+  <SolidColorBrush x:Key="Mac.TertiaryLabel" Color="#3C3C43" Opacity="0.35" />
+  <SolidColorBrush x:Key="Mac.PlaceholderLabel" Color="#3C3C43" Opacity="0.30" />
+
+  <!-- lines -->
+  <SolidColorBrush x:Key="Mac.Separator" Color="#D6D6D8" />
+  <SolidColorBrush x:Key="Mac.HairLine" Color="#E4E4E6" />
+
+  <!-- controls -->
+  <SolidColorBrush x:Key="Mac.ControlBackground" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.ControlHover" Color="#F2F2F4" />
+  <SolidColorBrush x:Key="Mac.ControlPressed" Color="#E4E4E7" />
+  <SolidColorBrush x:Key="Mac.ControlBorder" Color="#C9C9CE" />
+  <SolidColorBrush x:Key="Mac.ControlDisabled" Color="#F5F5F7" />
+  <SolidColorBrush x:Key="Mac.FieldBackground" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.FieldBorder" Color="#C4C4C9" />
+
+  <!-- segmented control -->
+  <SolidColorBrush x:Key="Mac.SegmentTrack" Color="#E3E3E6" />
+  <SolidColorBrush x:Key="Mac.SegmentThumb" Color="#FFFFFF" />
+
+  <!-- selection -->
+  <SolidColorBrush x:Key="Mac.SelectionFill" Color="#007AFF" />
+  <SolidColorBrush x:Key="Mac.SelectionText" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="Mac.SelectionInactive" Color="#DCDCE0" />
+
+  <!-- semantic -->
+  <SolidColorBrush x:Key="Mac.Red" Color="#FF3B30" />
+  <SolidColorBrush x:Key="Mac.Orange" Color="#C77700" />
+  <SolidColorBrush x:Key="Mac.Green" Color="#248A3D" />
+  <SolidColorBrush x:Key="Mac.Yellow" Color="#B25000" />
+
+  <!-- scrollers -->
+  <SolidColorBrush x:Key="Mac.ScrollThumb" Color="#000000" Opacity="0.28" />
+  <SolidColorBrush x:Key="Mac.ScrollThumbHover" Color="#000000" Opacity="0.45" />
+
+  <!-- window drop shadow -->
+  <Color x:Key="Mac.ShadowColor">#000000</Color>
+
+</ResourceDictionary>

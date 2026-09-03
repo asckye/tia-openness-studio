@@ -10,9 +10,13 @@
   </PropertyGroup>
 
   <Target Name="BuildBridge" BeforeTargets="Build" Condition="'$(SkipBridgeDeploy)' != 'true'">
+    <!-- Global properties from a self-contained `dotnet publish -r win-x64` invocation would
+         otherwise flow into this nested build and send the net48 bridge to bin\...\net48\win-x64\,
+         so it is never found where LocateBridge looks. Strip everything publish-specific. -->
     <MSBuild Projects="$(BridgeProject)"
              Targets="Build"
-             Properties="Configuration=$(Configuration)" />
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir;PublishTrimmed;PublishReadyToRun;IncludeNativeLibrariesForSelfExtract;EnableCompressionInSingleFile;_IsPublishing;DebugType;DebugSymbols" />
   </Target>
 
   <Target Name="CopyBridge" AfterTargets="Build" DependsOnTargets="BuildBridge"
@@ -24,5 +28,22 @@
           DestinationFiles="@(BridgeFiles->'$(OutDir)bridge\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
     <Message Importance="normal" Text="Deployed bridge from $(BridgeOutDir) to $(OutDir)bridge\" />
+  </Target>
+
+  <!--
+    dotnet publish writes to PublishDir, not OutDir, so the copy above never reaches a published
+    build - the front end would start and immediately report the bridge missing. Publishing a
+    single-file front end keeps BaseDirectory at the exe's own folder, so bridge\ beside the exe
+    is still where BridgeClient.LocateBridge looks.
+  -->
+  <Target Name="PublishBridge" AfterTargets="Publish" DependsOnTargets="BuildBridge"
+          Condition="'$(SkipBridgeDeploy)' != 'true'">
+    <ItemGroup>
+      <BridgePublishFiles Include="$(BridgeOutDir)**\*" Exclude="$(BridgeOutDir)**\*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BridgePublishFiles)"
+          DestinationFiles="@(BridgePublishFiles->'$(PublishDir)bridge\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Published bridge to $(PublishDir)bridge\" />
   </Target>
 </Project>

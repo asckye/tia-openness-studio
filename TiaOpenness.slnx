@@ -8,4 +8,8 @@
     <Project Path="src/TiaOpenness.Gui/TiaOpenness.Gui.csproj" />
     <Project Path="src/TiaOpenness.Mcp/TiaOpenness.Mcp.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TiaOpenness.Core.Tests/TiaOpenness.Core.Tests.csproj" />
+    <Project Path="tests/TiaOpenness.Gui.Tests/TiaOpenness.Gui.Tests.csproj" />
+  </Folder>
 </Solution>

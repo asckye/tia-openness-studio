@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
-using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,6 +11,7 @@ using System.Windows.Data;
 using TiaOpenness.Client;
 using TiaOpenness.Contracts.Models;
 using TiaOpenness.Gui.Common;
+using TiaOpenness.Gui.Localization;
 
 namespace TiaOpenness.Gui.ViewModels;
 
@@ -28,8 +30,8 @@ public sealed class BlockRow(BlockInfo info) : ObservableObject
 
     /// <summary>Short reason the block cannot be exported, or empty when it can.</summary>
     public string Status =>
-        Info.IsKnowHowProtected ? "know-how protected"
-        : !Info.IsConsistent ? "needs compiling"
+        Info.IsKnowHowProtected ? Loc.Current["Block.Protected"]
+        : !Info.IsConsistent ? Loc.Current["Block.NeedsCompiling"]
         : string.Empty;
 
     public bool Selected
@@ -37,6 +39,9 @@ public sealed class BlockRow(BlockInfo info) : ObservableObject
         get => _selected;
         set => Set(ref _selected, value);
     }
+
+    /// <summary>Called when the language changes; <see cref="Status"/> is translated on read.</summary>
+    public void RefreshLocalizedText() => Raise(nameof(Status));
 }
 
 /// <summary>Drives the single main window.</summary>
@@ -46,8 +51,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _started;
 
     private string _projectPath = string.Empty;
+    private string _projectName = string.Empty;
     private string _outputDirectory = string.Empty;
-    private string _status = "Not connected.";
+    private LocalizedText _status = LocalizedText.Key("Status.NotConnected");
     private string _log = string.Empty;
     private string _blockFilter = string.Empty;
     private string _namePattern = "^(OB|FB|FC|DB|UDT)_";
@@ -56,6 +62,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _headless;
     private bool _sourceFormat;
     private bool _busy;
+    private bool _isConnected;
     private int _progressValue;
     private int _progressMax;
 
@@ -72,9 +79,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BlocksView = CollectionViewSource.GetDefaultView(Blocks);
         BlocksView.Filter = FilterBlock;
 
+        Devices.CollectionChanged += OnDevicesChanged;
+
+        // Anything shown as text but stored as a key has to be re-read when the language flips.
+        Loc.Current.LanguageChanged += OnLanguageChanged;
+
         _client.Bridge.Log += (_, e) => Append("bridge: " + e.Line);
         _client.Bridge.Progress += (_, e) => OnProgress(e.Progress);
-        _client.Bridge.Exited += (_, _) => Append("bridge process exited.");
+        _client.Bridge.Exited += (_, _) =>
+        {
+            IsConnected = false;
+            Append(Loc.Current["Log.BridgeExited"]);
+        };
 
         RunDoctor = new AsyncCommand(DoctorAsync);
         Connect = new AsyncCommand(ConnectAsync);
@@ -102,6 +118,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             command.RaiseCanExecuteChanged();
         }
     }
+
+    /// <summary>
+    /// Re-reads everything whose text is a catalogue key rather than a literal. The log is left
+    /// alone on purpose: it is a record of what was reported at the time.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        Raise(nameof(Status));
+        Raise(nameof(SelectionSummary));
+        Raise(nameof(WorkspaceRootDisplay));
+        foreach (var row in Blocks) row.RefreshLocalizedText();
+    }
+
+    private void OnDevicesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        => Raise(nameof(HasNoDevices));
 
     // ---- bindable state ----------------------------------------------------
 
@@ -135,21 +166,28 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set { if (Set(ref _projectPath, value)) OpenProject.RaiseCanExecuteChanged(); }
     }
 
+    /// <summary>Shown beside the app name in the title bar, the way macOS names the document.</summary>
+    public string ProjectName { get => _projectName; private set => Set(ref _projectName, value); }
+
     public string OutputDirectory
     {
         get => _outputDirectory;
         set { if (Set(ref _outputDirectory, value)) Export.RaiseCanExecuteChanged(); }
     }
 
-    public string Status { get => _status; private set => Set(ref _status, value); }
+    public string Status => _status.Resolve();
+
     public string Log { get => _log; private set => Set(ref _log, value); }
     public string NamePattern { get => _namePattern; set => Set(ref _namePattern, value); }
     public bool UseMock { get => _useMock; set => Set(ref _useMock, value); }
     public bool Headless { get => _headless; set => Set(ref _headless, value); }
     public bool SourceFormat { get => _sourceFormat; set => Set(ref _sourceFormat, value); }
     public bool Busy { get => _busy; private set => Set(ref _busy, value); }
+    public bool IsConnected { get => _isConnected; private set => Set(ref _isConnected, value); }
     public int ProgressValue { get => _progressValue; private set => Set(ref _progressValue, value); }
     public int ProgressMax { get => _progressMax; private set => Set(ref _progressMax, value); }
+
+    public bool HasNoDevices => Devices.Count == 0;
 
     public string BlockFilter
     {
@@ -167,8 +205,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public WorkspaceInfo? SelectedWorkspace
     {
         get => _selectedWorkspace;
-        set { if (Set(ref _selectedWorkspace, value)) RaiseVcCommands(); }
+        set
+        {
+            if (!Set(ref _selectedWorkspace, value)) return;
+            Raise(nameof(WorkspaceRootDisplay));
+            RaiseVcCommands();
+        }
     }
+
+    /// <summary>The workspace's folder, or the sentence that explains there is not one yet.</summary>
+    public string WorkspaceRootDisplay
+        => SelectedWorkspace?.RootPath ?? Loc.Current["Vc.NoWorkspace"];
 
     public string NewWorkspaceName
     {
@@ -210,19 +257,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var selected = Blocks.Count(b => b.Selected);
             return selected == 0
-                ? $"{Blocks.Count} block(s); none selected - export will take all of them"
-                : $"{selected} of {Blocks.Count} block(s) selected";
+                ? Loc.Current.T("Blocks.Summary.None", Blocks.Count)
+                : Loc.Current.T("Blocks.Summary.Some", selected, Blocks.Count);
         }
     }
 
     // ---- commands ----------------------------------------------------------
 
-    private async Task DoctorAsync() => await Guarded("Checking environment", async () =>
+    private async Task DoctorAsync() => await Guarded("Status.CheckingEnvironment", async () =>
     {
         EnsureBridge();
         var report = await _client.DoctorAsync();
 
-        Append("--- environment ---");
+        Append(Loc.Current["Log.EnvironmentHeader"]);
         Append($"{report.MachineName} / {report.UserName} / {(report.Is64BitProcess ? "x64" : "x86")}");
         foreach (var check in report.Checks)
         {
@@ -231,35 +278,37 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         foreach (var install in report.Installations)
         {
-            Append($"installed: V{install.Version} {install.EngineeringDllPath}");
+            Append(Loc.Current.T("Log.Installed", install.Version, install.EngineeringDllPath));
         }
 
-        Status = report.CanRunOpenness
-            ? "Environment OK."
-            : "Environment not ready - see the log.";
+        if (report.CanRunOpenness) SetStatus("Status.EnvOk");
+        else SetStatus("Status.EnvNotReady");
     });
 
-    private async Task ConnectAsync() => await Guarded("Connecting to TIA Portal", async () =>
+    private async Task ConnectAsync() => await Guarded("Status.Connecting", async () =>
     {
         EnsureBridge();
         var state = await _client.ConnectAsync(!Headless);
-        Status = $"Connected ({state.Mode}, Openness {state.OpennessVersion}).";
+        IsConnected = true;
+        SetStatus("Status.Connected", state.Mode, state.OpennessVersion);
 
         // Attaching to a running TIA inherits whatever project it already had open.
         if (state.OpenProject is not null)
         {
             ProjectPath = state.OpenProject.Path ?? string.Empty;
-            Append($"attached to an open project: {state.OpenProject.Name}");
+            ProjectName = state.OpenProject.Name ?? string.Empty;
+            Append(Loc.Current.T("Log.Attached", state.OpenProject.Name));
             await LoadDevicesAsync();
         }
     });
 
-    private async Task OpenProjectAsync() => await Guarded("Opening project", async () =>
+    private async Task OpenProjectAsync() => await Guarded("Status.OpeningProject", async () =>
     {
         EnsureBridge();
         var project = await _client.OpenProjectAsync(ProjectPath);
-        Append($"opened {project.Name} ({project.Path})");
-        Status = $"Project {project.Name} open.";
+        ProjectName = project.Name ?? string.Empty;
+        Append(Loc.Current.T("Log.Opened", project.Name, project.Path));
+        SetStatus("Status.ProjectOpen", project.Name);
         await LoadDevicesAsync();
     });
 
@@ -270,7 +319,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var device in devices) Devices.Add(device);
 
         SelectedDevice = Devices.FirstOrDefault(d => d.Category == "Plc") ?? Devices.FirstOrDefault();
-        Append($"{devices.Count} device(s).");
+        Append(Loc.Current.T("Log.DeviceCount", devices.Count));
 
         // Populate the version-control tab up front, so the feature is visibly absent on
         // TIA Portal below V21 rather than failing when someone clicks a button.
@@ -281,9 +330,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (SelectedDevice is null) return;
 
-        await Guarded($"Reading blocks of {SelectedDevice.Id}", async () =>
+        var deviceId = SelectedDevice.Id;
+        await Guarded("Status.ReadingBlocks", async () =>
         {
-            var blocks = await _client.ListBlocksAsync(SelectedDevice.Id);
+            var blocks = await _client.ListBlocksAsync(deviceId);
             Blocks.Clear();
             foreach (var block in blocks)
             {
@@ -292,8 +342,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Blocks.Add(row);
             }
             Raise(nameof(SelectionSummary));
-            Status = $"{blocks.Count} block(s) in {SelectedDevice.Id}.";
-        });
+            SetStatus("Status.BlocksIn", blocks.Count, deviceId);
+        }, deviceId);
     }
 
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
@@ -301,7 +351,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (e.PropertyName == nameof(BlockRow.Selected)) Raise(nameof(SelectionSummary));
     }
 
-    private async Task ExportAsync() => await Guarded("Exporting", async () =>
+    private async Task ExportAsync() => await Guarded("Status.Exporting", async () =>
     {
         var selected = Blocks.Where(b => b.Selected).Select(b => b.Path).ToList();
         var format = SourceFormat ? ExportFormat.Source : ExportFormat.SimaticMl;
@@ -310,29 +360,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         foreach (var item in result.Items.Where(i => !i.Succeeded))
         {
-            Append($"FAILED {item.BlockPath}: {item.Error}");
+            Append(Loc.Current.T("Log.Failed", item.BlockPath, item.Error));
         }
 
-        Status = $"Exported {result.Succeeded}/{result.Requested} to {result.OutputDirectory}" +
-                 (result.Failed > 0 ? $" ({result.Failed} failed)" : string.Empty);
+        if (result.Failed > 0)
+        {
+            SetStatus("Status.ExportedFailed",
+                result.Succeeded, result.Requested, result.OutputDirectory, result.Failed);
+        }
+        else
+        {
+            SetStatus("Status.Exported", result.Succeeded, result.Requested, result.OutputDirectory);
+        }
+
         Append(Status);
     });
 
-    private async Task ImportAsync() => await Guarded("Importing", async () =>
+    private async Task ImportAsync() => await Guarded("Status.Importing", async () =>
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Select blocks to import",
-            Filter = "Importable files|*.xml;*.scl;*.db;*.udt|SimaticML (*.xml)|*.xml|Sources|*.scl;*.db;*.udt|All files|*.*",
+            Title = Loc.Current["Dialog.Import.Title"],
+            Filter = Loc.Current["Dialog.Import.Filter"],
             Multiselect = true,
         };
         if (dialog.ShowDialog() != true) return;
 
         var overwrite = MessageBox.Show(
-            "Replace blocks that already exist in the project?\n\n" +
-            "No  = fail on blocks that already exist (safer)\n" +
-            "Yes = overwrite them",
-            "Import", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            Loc.Current["Dialog.Import.Text"],
+            Loc.Current["Dialog.Import.Caption"], MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
         if (overwrite == MessageBoxResult.Cancel) return;
 
@@ -341,15 +397,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         foreach (var item in result.Items.Where(i => !i.Succeeded))
         {
-            Append($"FAILED {item.FilePath}: {item.Error}");
+            Append(Loc.Current.T("Log.Failed", item.FilePath, item.Error));
         }
 
-        Status = $"Imported {result.Succeeded}/{result.Requested} file(s). Not saved yet.";
+        SetStatus("Status.Imported", result.Succeeded, result.Requested);
         Append(Status);
         await RefreshBlocksAsync();
     });
 
-    private async Task CompileAsync() => await Guarded("Compiling", async () =>
+    private async Task CompileAsync() => await Guarded("Status.Compiling", async () =>
     {
         var result = await _client.CompileAsync(SelectedDevice!.Id);
 
@@ -358,38 +414,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Append($"{message.Severity}: {message.Target} - {message.Description}");
         }
 
-        Status = $"{result.State}: {result.ErrorCount} error(s), {result.WarningCount} warning(s) " +
-                 $"in {result.Duration.TotalSeconds:F1}s";
+        SetStatus("Status.CompileResult",
+            result.State, result.ErrorCount, result.WarningCount,
+            result.Duration.TotalSeconds.ToString("F1", CultureInfo.CurrentCulture));
+
         Append(Status);
         await RefreshBlocksAsync();
     });
 
-    private async Task InspectAsync() => await Guarded("Inspecting", async () =>
+    private async Task InspectAsync() => await Guarded("Status.Inspecting", async () =>
     {
         var report = await _client.InspectAsync(SelectedDevice!.Id,
             string.IsNullOrWhiteSpace(NamePattern) ? null : NamePattern);
 
-        Append($"--- inspection of {report.DeviceId} ---");
+        Append(Loc.Current.T("Log.InspectionHeader", report.DeviceId));
         foreach (var group in report.Findings.GroupBy(f => f.RuleId).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
             Append($"{group.Key} ({group.Count()})");
             foreach (var finding in group) Append($"    [{finding.Severity}] {finding.Target}: {finding.Message}");
         }
 
-        Status = $"{report.Findings.Count} finding(s) over {report.BlocksScanned} block(s).";
+        SetStatus("Status.InspectResult", report.Findings.Count, report.BlocksScanned);
         Append(Status);
     });
 
-    private async Task SaveAsync() => await Guarded("Saving project", async () =>
+    private async Task SaveAsync() => await Guarded("Status.SavingProject", async () =>
     {
-        if (MessageBox.Show("Save the project to disk? This cannot be undone.", "Save",
+        if (MessageBox.Show(
+                Loc.Current["Dialog.Save.Text"], Loc.Current["Dialog.Save.Caption"],
                 MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
         {
             return;
         }
 
         await _client.SaveProjectAsync();
-        Status = "Project saved.";
+        SetStatus("Status.ProjectSaved");
         Append(Status);
     });
 
@@ -405,27 +464,42 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _client.Start(forceMock: UseMock);
         _started = true;
-        Append($"bridge started ({(UseMock ? "mock" : "openness")}).");
+        Append(Loc.Current.T("Log.BridgeStarted", UseMock ? "mock" : "openness"));
     }
 
-    private async Task Guarded(string what, Func<Task> action)
+    private void SetStatus(string key, params object?[] args)
+    {
+        _status = LocalizedText.Key(key, args);
+        Raise(nameof(Status));
+    }
+
+    /// <summary>For text that is already final - an exception message from the bridge.</summary>
+    private void SetStatusLiteral(string text)
+    {
+        _status = LocalizedText.Literal(text);
+        Raise(nameof(Status));
+    }
+
+    private async Task Guarded(string workingKey, Func<Task> action, params object?[] workingArgs)
     {
         Busy = true;
-        Status = what + "...";
+        _status = LocalizedText.Working(workingKey, workingArgs);
+        Raise(nameof(Status));
+
         try
         {
             await action();
         }
         catch (BridgeRpcException ex)
         {
-            Status = ex.Message;
-            Append("error: " + ex.Message);
+            SetStatusLiteral(ex.Message);
+            Append(Loc.Current.T("Log.Error", ex.Message));
             if (ex.Data2 is not null) Append(ex.Data2);
         }
         catch (Exception ex)
         {
-            Status = ex.Message;
-            Append("error: " + ex.Message);
+            SetStatusLiteral(ex.Message);
+            Append(Loc.Current.T("Log.Error", ex.Message));
         }
         finally
         {
@@ -440,7 +514,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             ProgressMax = payload.Total;
             ProgressValue = payload.Current;
-            Status = $"{payload.Operation} {payload.Current}/{payload.Total}: {payload.Message}";
+            SetStatusLiteral($"{payload.Operation} {payload.Current}/{payload.Total}: {payload.Message}");
         });
     }
 
@@ -456,6 +530,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         Log += stamped;
     }
+
+    public void ClearLog() => Log = string.Empty;
 
     private bool FilterBlock(object item)
     {
@@ -483,21 +559,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Open a TIA Portal project",
-            Filter = "TIA Portal projects|*.ap21;*.ap20;*.ap19;*.ap18;*.ap17;*.ap16;*.ap15_1|All files|*.*",
+            Title = Loc.Current["Dialog.OpenProject.Title"],
+            Filter = Loc.Current["Dialog.OpenProject.Filter"],
         };
         if (dialog.ShowDialog() == true) ProjectPath = dialog.FileName;
     }
 
     public void BrowseWorkspaceFolder()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the workspace folder (your Git working tree)" };
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.Current["Dialog.Workspace.Title"] };
         if (dialog.ShowDialog() == true) NewWorkspaceFolder = dialog.FolderName;
     }
 
     public void BrowseOutput()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Choose the export folder" };
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Loc.Current["Dialog.Export.Title"] };
         if (dialog.ShowDialog() == true) OutputDirectory = dialog.FolderName;
     }
 
@@ -507,7 +583,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// Loads the VCI panel. Absent below TIA Portal V21, in which case the panel disables itself
     /// rather than offering buttons that can only fail.
     /// </summary>
-    private async Task VcRefreshAsync() => await Guarded("Reading version control", async () =>
+    private async Task VcRefreshAsync() => await Guarded("Status.ReadingVc", async () =>
     {
         EnsureBridge();
         VcSupported = await _client.VcSupportedAsync();
@@ -517,7 +593,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!VcSupported)
         {
-            Status = "This project has no Version Control Interface (needs TIA Portal V21+).";
+            SetStatus("Status.VcUnsupported");
             Append(Status);
             return;
         }
@@ -527,11 +603,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (Workspaces.Count == 0)
         {
-            Status = "No workspace yet. Point one at your Git working tree and create it.";
+            SetStatus("Status.VcNoWorkspace");
             return;
         }
 
-        Status = $"{Workspaces.Count} workspace(s).";
+        SetStatus("Status.VcWorkspaces", Workspaces.Count);
 
         // Load the diff straight away: opening the tab should answer "what changed?" without
         // a second click, and it is read-only.
@@ -545,21 +621,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         VcStatusItems.Clear();
         foreach (var item in report.Items) VcStatusItems.Add(item);
 
-        Status = report.InSync
-            ? $"{report.Total} mapped object(s), all in sync - nothing to commit."
-            : $"{report.Total} mapped object(s), {report.Differing} differ.";
+        if (report.InSync) SetStatus("Status.VcInSync", report.Total);
+        else SetStatus("Status.VcDiffer", report.Total, report.Differing);
     }
 
-    private async Task VcCreateAsync() => await Guarded("Creating workspace", async () =>
+    private async Task VcCreateAsync() => await Guarded("Status.CreatingWorkspace", async () =>
     {
         var workspace = await _client.VcCreateWorkspaceAsync(NewWorkspaceName, NewWorkspaceFolder);
-        Append($"created workspace '{workspace.Name}' at {workspace.RootPath}");
+        Append(Loc.Current.T("Log.WorkspaceCreated", workspace.Name, workspace.RootPath));
         await VcRefreshAsync();
         SelectedWorkspace = Workspaces.FirstOrDefault(w => w.Name == workspace.Name);
-        Status = "Workspace created. Now map the project into it.";
+        SetStatus("Status.VcCreated");
     });
 
-    private async Task VcMapAsync() => await Guarded("Mapping project", async () =>
+    private async Task VcMapAsync() => await Guarded("Status.MappingProject", async () =>
     {
         var result = await _client.VcMapProjectAsync(SelectedWorkspace?.Name, SelectedDevice?.Id, VcDryRun);
 
@@ -568,17 +643,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Append($"{item.Outcome}: {item.Target} - {item.Error}");
         }
 
-        Status = result.DryRun
-            ? $"Dry run: {result.Mapped} would be mapped, {result.AlreadyMapped} already, " +
-              $"{result.Unsupported} unsupported. Clear 'Dry run' to apply."
-            : $"Mapped {result.Mapped}, already {result.AlreadyMapped}, unsupported {result.Unsupported}, " +
-              $"failed {result.Failed}.";
+        if (result.DryRun)
+        {
+            SetStatus("Status.VcMapDry", result.Mapped, result.AlreadyMapped, result.Unsupported);
+        }
+        else
+        {
+            SetStatus("Status.VcMapApplied",
+                result.Mapped, result.AlreadyMapped, result.Unsupported, result.Failed);
+        }
 
         Append(Status);
         if (!result.DryRun) await VcStatusAsync();
     });
 
-    private async Task VcStatusAsync() => await Guarded("Comparing with workspace", async () =>
+    private async Task VcStatusAsync() => await Guarded("Status.ComparingWorkspace", async () =>
     {
         await LoadVcStatusAsync();
         Append(Status);
@@ -589,40 +668,43 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task VcPullAsync()
     {
         if (!VcDryRun && MessageBox.Show(
-                "Read the workspace's text files back INTO the project?\n\n" +
-                "This OVERWRITES blocks in the open project and cannot be undone.\n" +
-                "Compile and save afterwards.",
-                "Restore from workspace", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+                Loc.Current["Dialog.Pull.Text"], Loc.Current["Dialog.Pull.Caption"],
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
         {
             return;
         }
         await VcSyncAsync(SyncDirection.WorkspaceToProject);
     }
 
-    private async Task VcSyncAsync(SyncDirection direction) => await Guarded($"Synchronizing {direction}", async () =>
+    private async Task VcSyncAsync(SyncDirection direction)
+        => await Guarded("Status.Synchronizing", async () =>
     {
         var result = await _client.VcSyncAsync(SelectedWorkspace?.Name, direction, VcDryRun);
 
         foreach (var item in result.Items.Where(i => i.Error is not null))
         {
-            Append($"FAILED {item.Name}: {item.Error}");
+            Append(Loc.Current.T("Log.Failed", item.Name, item.Error));
         }
 
-        Status = result.DryRun
-            ? $"Dry run: {result.Synchronized} would sync {direction}, {result.SkippedEqual} already equal. " +
-              "Clear 'Dry run' to apply."
-            : $"{result.Synchronized} synchronized, {result.Failed} failed, {result.SkippedEqual} already equal.";
+        if (result.DryRun)
+        {
+            SetStatus("Status.VcSyncDry", result.Synchronized, direction, result.SkippedEqual);
+        }
+        else
+        {
+            SetStatus("Status.VcSyncApplied", result.Synchronized, result.Failed, result.SkippedEqual);
+        }
 
         Append(Status);
 
         if (!result.DryRun)
         {
             Append(direction == SyncDirection.ProjectToWorkspace
-                ? $"Commit from {result.RootPath}:  git add -A && git commit"
-                : "The project now holds the workspace's version - compile and save it.");
+                ? Loc.Current.T("Log.CommitHint", result.RootPath)
+                : Loc.Current["Log.PullHint"]);
             await VcStatusAsync();
         }
-    });
+    }, direction);
 
     /// <summary>
     /// Applies command-line startup options: <c>--mock</c> to use the synthetic backend and
@@ -646,5 +728,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (ProjectPath.Length > 0) await OpenProjectAsync();
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        Loc.Current.LanguageChanged -= OnLanguageChanged;
+        _client.Dispose();
+    }
 }

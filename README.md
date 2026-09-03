@@ -71,6 +71,18 @@ src\TiaOpenness.Gui\bin\Release\net10.0-windows\TiaOpenness.Studio.exe --mock
 The app opens a synthetic project with two devices and ten blocks. Export really writes files;
 compile really returns diagnostics. Nothing touches a real project.
 
+The desktop app follows the macOS Human Interface Guidelines - traffic lights, a unified
+toolbar, a sidebar and a segmented tab strip - and ships in **English and Chinese**. Both the
+language and the appearance (auto / light / dark, where *auto* tracks the Windows setting) are
+switched live from the title bar and remembered between runs. For a demo or a screenshot they
+can be pinned from the command line without touching the saved preference:
+
+```bash
+TiaOpenness.Studio.exe --mock --lang zh --theme dark
+```
+
+![The same window in Chinese, dark appearance](docs/images/studio-dark-zh.png)
+
 ### Against a real TIA Portal
 
 1. Install TIA Portal V21 **with the Openness option**.
@@ -202,11 +214,35 @@ src/
   TiaOpenness.Client/      typed client + process management netstandard2.0
   TiaOpenness.Cli/         tia.exe                           net10.0
   TiaOpenness.Gui/         TiaOpenness.Studio.exe            net10.0-windows
+    Themes/                macOS palettes (light/dark), control templates, window chrome
+    Localization/          the EN/ZH string catalogue and the {l:Tr} markup extension
   TiaOpenness.Mcp/         MCP stdio server                  net10.0
+tests/
+  TiaOpenness.Core.Tests/  inspection rules, mock session,
+                           doctor report                      net48
+  TiaOpenness.Gui.Tests/   catalogue parity, theme tokens,
+                           live language switch, main-window
+                           smoke render                       net10.0-windows
 lib/                       Siemens assemblies (not in git; V20 or V21 layout)
 tools/                     fetch-openness-dlls.ps1
 docs/                      deployment, version control, protocol, roadmap
 ```
+
+Application code lives under `src/`, tests under `tests/`; nothing in `src/` references a test
+framework. The two trees are separate solution folders in `TiaOpenness.slnx`.
+
+## Tests
+
+```bash
+dotnet test TiaOpenness.slnx -c Release
+```
+
+Nothing in the suite needs TIA Portal. The Core tests run the inspection rules and the mock
+session on .NET Framework 4.8, the same runtime the bridge uses. The GUI tests build the real
+main window on a WPF thread and render it, which is what catches a resource key that resolves to
+the wrong type or a template that quietly binds to nothing; they also scan the UI's own source to
+prove every `{l:Tr …}` key and every `{DynamicResource …}` it names actually exists, and that
+the English and Chinese catalogues use the same `{0}` placeholders.
 
 ## Prior art
 
