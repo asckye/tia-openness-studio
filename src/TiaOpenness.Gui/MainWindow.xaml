@@ -1,0 +1,269 @@
+<Window x:Class="TiaOpenness.Gui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TIA Openness Studio" Height="820" Width="1240"
+        Background="{StaticResource Canvas}"
+        FontFamily="Segoe UI" FontSize="13">
+
+  <DockPanel>
+
+    <!-- toolbar -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" Padding="12,10"
+            BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <Button Content="Doctor" Command="{Binding RunDoctor}"
+                  ToolTip="Check every Openness precondition on this machine" />
+          <Button Content="Connect" Command="{Binding Connect}" />
+          <CheckBox Content="Mock" IsChecked="{Binding UseMock}" VerticalAlignment="Center" Margin="4,0,12,0"
+                    ToolTip="Run against a synthetic project; no TIA Portal needed" />
+          <CheckBox Content="Headless" IsChecked="{Binding Headless}" VerticalAlignment="Center" Margin="0,0,16,0"
+                    ToolTip="Start TIA Portal without its window. Cannot show the first-connect trust dialog." />
+          <Separator Margin="0,0,12,0" />
+          <Button Content="Compile" Command="{Binding Compile}" />
+          <Button Content="Inspect" Command="{Binding Inspect}" />
+          <Button Content="Import..." Command="{Binding Import}" />
+          <Button Content="Save project" Command="{Binding Save}" Foreground="{StaticResource Danger}" />
+        </StackPanel>
+
+        <Grid Margin="0,10,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="Project" VerticalAlignment="Center" Margin="0,0,8,0"
+                     Foreground="{StaticResource Muted}" />
+          <TextBox Grid.Column="1" Text="{Binding ProjectPath, UpdateSourceTrigger=PropertyChanged}"
+                   VerticalContentAlignment="Center" Padding="6,4" />
+          <Button Grid.Column="2" Content="Browse..." Click="OnBrowseProject" Margin="6,0,0,0" MinWidth="80" />
+          <Button Grid.Column="3" Content="Open" Command="{Binding OpenProject}" MinWidth="70" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- status bar -->
+    <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Padding="12,6"
+            BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        <ProgressBar Grid.Column="1" Width="200" Height="12" Margin="12,0,0,0"
+                     Maximum="{Binding ProgressMax}" Value="{Binding ProgressValue, Mode=OneWay}"
+                     Visibility="{Binding Busy, Converter={StaticResource BoolToVisibility}}" />
+      </Grid>
+    </Border>
+
+    <!-- body -->
+    <Grid Margin="12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="250" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <!-- devices -->
+      <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="10">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="DEVICES" Style="{StaticResource Section}" />
+          <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
+                   BorderThickness="0" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Margin="0,3">
+                  <TextBlock Text="{Binding Id}" FontWeight="SemiBold" />
+                  <TextBlock Foreground="{StaticResource Muted}" FontSize="11">
+                    <Run Text="{Binding Category, Mode=OneWay}" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding ArticleNumber, Mode=OneWay}" />
+                  </TextBlock>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+
+      <Grid Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="6" />
+          <RowDefinition Height="170" />
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="Tabs" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" Padding="10">
+
+          <!-- ===== blocks ===== -->
+          <TabItem Header="Blocks">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" Margin="0,8,0,8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Margin="0,0,12,0" Padding="6,3"
+                         Text="{Binding BlockFilter, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Filter by path" />
+                <Button Grid.Column="1" Content="All" Click="OnSelectAll" MinWidth="52" />
+                <Button Grid.Column="2" Content="None" Click="OnSelectNone" MinWidth="52" />
+                <Button Grid.Column="3" Content="Reload" Command="{Binding Refresh}" MinWidth="64" />
+              </Grid>
+
+              <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Export to" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{StaticResource Muted}" />
+                <TextBox Grid.Column="1" Padding="6,3"
+                         Text="{Binding OutputDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="2" Content="Browse..." Click="OnBrowseOutput" Margin="6,0,0,0" MinWidth="80" />
+                <CheckBox Grid.Column="3" Content="Source (.scl)" IsChecked="{Binding SourceFormat}"
+                          VerticalAlignment="Center" Margin="8,0,10,0"
+                          ToolTip="Text export instead of SimaticML .xml. Only works for textual languages." />
+                <Button Grid.Column="4" Content="Export" Command="{Binding Export}" />
+              </Grid>
+
+              <TextBlock DockPanel.Dock="Bottom" Text="{Binding SelectionSummary}" FontSize="11"
+                         Foreground="{StaticResource Muted}" Margin="0,8,0,0" />
+
+              <DataGrid ItemsSource="{Binding BlocksView}" AutoGenerateColumns="False"
+                        CanUserAddRows="False" IsReadOnly="False" HeadersVisibility="Column"
+                        GridLinesVisibility="Horizontal" BorderThickness="0"
+                        HorizontalGridLinesBrush="{StaticResource Line}" RowHeight="24">
+                <DataGrid.Columns>
+                  <DataGridCheckBoxColumn Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}"
+                                          Width="34" />
+                  <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" IsReadOnly="True" />
+                  <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="90" IsReadOnly="True" />
+                  <DataGridTextColumn Header="No." Binding="{Binding Number}" Width="60" IsReadOnly="True" />
+                  <DataGridTextColumn Header="Lang" Binding="{Binding Language}" Width="70" IsReadOnly="True" />
+                  <DataGridTextColumn Header="Author" Binding="{Binding Author}" Width="110" IsReadOnly="True" />
+                  <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="150" IsReadOnly="True">
+                    <DataGridTextColumn.ElementStyle>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                      </Style>
+                    </DataGridTextColumn.ElementStyle>
+                  </DataGridTextColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </TabItem>
+
+          <!-- ===== version control ===== -->
+          <TabItem Header="Version control">
+            <DockPanel>
+
+              <!-- workspace selection -->
+              <Grid DockPanel.Dock="Top" Margin="0,8,0,6">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{StaticResource Muted}" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Workspaces}"
+                          SelectedItem="{Binding SelectedWorkspace}" DisplayMemberPath="Name"
+                          Padding="6,3" />
+                <Button Grid.Column="2" Content="Reload" Command="{Binding VcRefresh}" Margin="6,0,0,0" MinWidth="70" />
+              </Grid>
+
+              <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" FontSize="11" TextWrapping="Wrap"
+                         Foreground="{StaticResource Muted}"
+                         Text="{Binding SelectedWorkspace.RootPath, TargetNullValue='No workspace selected. Create one over your Git working tree below.'}" />
+
+              <!-- create -->
+              <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="110" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="New" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{StaticResource Muted}" />
+                <TextBox Grid.Column="1" Padding="6,3"
+                         Text="{Binding NewWorkspaceName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Column="2" Text="in" VerticalAlignment="Center" Margin="8,0,8,0"
+                           Foreground="{StaticResource Muted}" />
+                <TextBox Grid.Column="3" Padding="6,3"
+                         Text="{Binding NewWorkspaceFolder, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="An existing folder - normally your Git working tree" />
+                <Button Grid.Column="4" Content="Browse..." Click="OnBrowseWorkspace" Margin="6,0,0,0" MinWidth="80" />
+                <Button Grid.Column="5" Content="Create" Command="{Binding VcCreate}" MinWidth="70" />
+              </Grid>
+
+              <!-- actions -->
+              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                <CheckBox Content="Dry run" IsChecked="{Binding VcDryRun}" VerticalAlignment="Center"
+                          Margin="0,0,14,0"
+                          ToolTip="Report what would happen without changing anything. Clear it to apply." />
+                <CheckBox Content="Show in-sync objects" IsChecked="{Binding VcShowAll}" VerticalAlignment="Center"
+                          Margin="0,0,16,0" />
+                <Separator Margin="0,0,12,0" />
+                <Button Content="Map project" Command="{Binding VcMap}"
+                        ToolTip="Map the project's objects into the workspace so they can be exported as text" />
+                <Button Content="Status" Command="{Binding VcStatus}" />
+                <Button Content="Push →" Command="{Binding VcPush}"
+                        ToolTip="Write the project out as text files, ready to commit" />
+                <Button Content="← Pull" Command="{Binding VcPull}" Foreground="{StaticResource Danger}"
+                        ToolTip="Read the text files back into the project. Overwrites blocks." />
+              </StackPanel>
+
+              <DataGrid ItemsSource="{Binding VcStatusItems}" AutoGenerateColumns="False" IsReadOnly="True"
+                        CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                        BorderThickness="0" HorizontalGridLinesBrush="{StaticResource Line}" RowHeight="24">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="State" Binding="{Binding CompareState}" Width="170">
+                    <DataGridTextColumn.ElementStyle>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding CompareState}" Value="Equal">
+                            <Setter Property="Foreground" Value="{StaticResource Good}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </DataGridTextColumn.ElementStyle>
+                  </DataGridTextColumn>
+                  <DataGridTextColumn Header="Object" Binding="{Binding Name}" Width="*" />
+                  <DataGridTextColumn Header="Format" Binding="{Binding FileFormat}" Width="90" />
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </TabItem>
+        </TabControl>
+
+        <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="Transparent" />
+
+        <!-- log -->
+        <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                BorderThickness="1" Padding="10">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="LOG" Style="{StaticResource Section}" />
+            <TextBox Text="{Binding Log, Mode=OneWay}" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas"
+                     FontSize="11.5" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"
+                     HorizontalScrollBarVisibility="Auto" BorderThickness="0" Background="#FAFBFC"
+                     Padding="6" TextChanged="OnLogChanged" />
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+  </DockPanel>
+</Window>

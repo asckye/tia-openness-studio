@@ -1,0 +1,16 @@
+# build output
+bin/
+obj/
+
+# IDE local state
+.vs/
+.idea/
+*.user
+*.suo
+
+# runtime artefacts
+*.crash.log
+
+# Siemens assemblies are not redistributable; fetch them with tools/fetch-openness-dlls.ps1
+lib/*.dll
+lib/OPENNESS_VERSION.txt

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TiaOpenness.Bridge/TiaOpenness.Bridge.csproj" />
+    <Project Path="src/TiaOpenness.Cli/TiaOpenness.Cli.csproj" />
+    <Project Path="src/TiaOpenness.Client/TiaOpenness.Client.csproj" />
+    <Project Path="src/TiaOpenness.Contracts/TiaOpenness.Contracts.csproj" />
+    <Project Path="src/TiaOpenness.Core/TiaOpenness.Core.csproj" />
+    <Project Path="src/TiaOpenness.Gui/TiaOpenness.Gui.csproj" />
+    <Project Path="src/TiaOpenness.Mcp/TiaOpenness.Mcp.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,28 @@
+<Project>
+  <!--
+    Front ends target modern .NET while the bridge must stay on .NET Framework 4.8 x64,
+    so it cannot be a normal ProjectReference. This builds it first, then copies its whole
+    output next to the front end as bridge\, which is where BridgeClient.LocateBridge looks.
+  -->
+  <PropertyGroup>
+    <BridgeProject>$(RepoRoot)src\TiaOpenness.Bridge\TiaOpenness.Bridge.csproj</BridgeProject>
+    <BridgeOutDir>$(RepoRoot)src\TiaOpenness.Bridge\bin\$(Configuration)\net48\</BridgeOutDir>
+  </PropertyGroup>
+
+  <Target Name="BuildBridge" BeforeTargets="Build" Condition="'$(SkipBridgeDeploy)' != 'true'">
+    <MSBuild Projects="$(BridgeProject)"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <Target Name="CopyBridge" AfterTargets="Build" DependsOnTargets="BuildBridge"
+          Condition="'$(SkipBridgeDeploy)' != 'true'">
+    <ItemGroup>
+      <BridgeFiles Include="$(BridgeOutDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BridgeFiles)"
+          DestinationFiles="@(BridgeFiles->'$(OutDir)bridge\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="normal" Text="Deployed bridge from $(BridgeOutDir) to $(OutDir)bridge\" />
+  </Target>
+</Project>

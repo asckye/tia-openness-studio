@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>TiaOpenness.Openness</RootNamespace>
+    <AssemblyName>TiaOpenness.Openness</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TiaOpenness.Core\TiaOpenness.Core.csproj" />
+    <ProjectReference Include="..\TiaOpenness.Contracts\TiaOpenness.Contracts.csproj" />
+  </ItemGroup>
+
+  <!--
+    Reference whatever lib\ holds rather than a fixed list: V21 ships Siemens.Engineering.Base,
+    .Step7, .WinCC and more, while V20 and earlier ship one Siemens.Engineering.dll. This mirrors
+    the wildcard Siemens themselves use in ReferenceSiemensEngineeringAssemblies.targets.
+
+    Private=false keeps the assemblies out of the output folder on purpose: at run time
+    OpennessAssemblyResolver loads them from the TIA Portal install directory, and a stale copy
+    next to the bridge would shadow the correct one.
+    Populate lib\ with tools\fetch-openness-dlls.ps1 on a machine that has TIA Portal.
+  -->
+  <ItemGroup>
+    <OpennessAssembly Include="$(OpennessLibDir)Siemens.Engineering*.dll" />
+    <Reference Include="@(OpennessAssembly->'%(Filename)')">
+      <HintPath>%(OpennessAssembly.FullPath)</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ReportOpennessReferences" BeforeTargets="Build">
+    <Error Condition="'$(HasOpennessLib)' != 'true'"
+           Text="lib\ holds neither Siemens.Engineering.dll (V20 and earlier) nor Siemens.Engineering.Base.dll (V21+). Run tools\fetch-openness-dlls.ps1 on a machine with TIA Portal installed. This project is only referenced when one of those files exists, so the rest of the solution still builds without it." />
+    <Message Importance="high"
+             Text="Openness adapter: building against @(OpennessAssembly->'%(Filename)', ', ') ($(OpennessLibDir))" />
+  </Target>
+</Project>

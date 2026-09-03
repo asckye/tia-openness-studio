@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591;NU1701</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+  </PropertyGroup>
+
+  <!--
+    Which Openness layout lib\ holds. V21 and later ship several assemblies anchored by
+    Siemens.Engineering.Base.dll; V15.1 - V20 ship the single Siemens.Engineering.dll.
+    Either one enables the Openness adapter; neither builds it and the bridge says so.
+  -->
+  <PropertyGroup>
+    <OpennessLibDir>$(RepoRoot)lib\</OpennessLibDir>
+    <OpennessMonolithicLib>$(OpennessLibDir)Siemens.Engineering.dll</OpennessMonolithicLib>
+    <OpennessModularLib>$(OpennessLibDir)Siemens.Engineering.Base.dll</OpennessModularLib>
+
+    <HasOpennessLib>false</HasOpennessLib>
+    <HasOpennessLib Condition="Exists('$(OpennessMonolithicLib)') Or Exists('$(OpennessModularLib)')">true</HasOpennessLib>
+    <OpennessIsModular Condition="Exists('$(OpennessModularLib)')">true</OpennessIsModular>
+  </PropertyGroup>
+</Project>
