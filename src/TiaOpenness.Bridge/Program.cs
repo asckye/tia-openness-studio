@@ -35,11 +35,17 @@ namespace TiaOpenness.Bridge
             var stdout = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = false };
             var stdin = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
 
-            var factory = SessionFactoryLoader.Resolve(forceMock, GetValue(args, "--openness-version"));
-            Console.Error.WriteLine("[bridge] mode=" + factory.Mode + "; " + SessionFactoryLoader.LastDecision);
+            var opennessVersion = GetValue(args, "--openness-version");
+            Func<ITiaSessionFactory> resolveFactory = () => SessionFactoryLoader.Resolve(forceMock, opennessVersion);
+
+            // Report the startup verdict, but let the dispatcher resolve again later: the adapter
+            // can be built while this process is running, and requiring a restart to notice made
+            // enable-openness.ps1 look like it had done nothing.
+            var initial = resolveFactory();
+            Console.Error.WriteLine("[bridge] mode=" + initial.Mode + "; " + SessionFactoryLoader.LastDecision);
             Console.Error.Flush();
 
-            using (var dispatcher = new RpcDispatcher(factory, n => WriteLine(stdout, n)))
+            using (var dispatcher = new RpcDispatcher(resolveFactory, n => WriteLine(stdout, n)))
             {
                 string line;
                 while ((line = stdin.ReadLine()) != null)

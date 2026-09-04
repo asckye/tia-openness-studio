@@ -391,6 +391,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task ConnectAsync() => await Guarded("Status.Connecting", async () =>
     {
+        await ConnectCoreAsync(adoptOpenProject: true);
+    });
+
+    /// <summary>
+    /// Opens the session. Shared with <see cref="OpenProjectAsync"/>, which connects on the
+    /// operator's behalf rather than making them discover the ordering.
+    /// </summary>
+    /// <param name="adoptOpenProject">
+    /// Take over whatever project a running TIA already had open. Right when the operator asked
+    /// only to connect; wrong when they named a project to open, which would be overwritten.
+    /// </param>
+    private async Task ConnectCoreAsync(bool adoptOpenProject)
+    {
         EnsureBridge();
         var state = await _client.ConnectAsync(!Headless);
         IsConnected = true;
@@ -398,14 +411,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SetStatus("Status.Connected", state.Mode, state.OpennessVersion);
 
         // Attaching to a running TIA inherits whatever project it already had open.
-        if (state.OpenProject is not null)
+        if (adoptOpenProject && state.OpenProject is not null)
         {
             ProjectPath = state.OpenProject.Path ?? string.Empty;
             ProjectName = state.OpenProject.Name ?? string.Empty;
             Append(Loc.Current.T("Log.Attached", state.OpenProject.Name));
             await LoadDevicesAsync();
         }
-    });
+    }
 
     private void SetOpennessVersion(string? version)
     {
@@ -416,6 +429,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task OpenProjectAsync() => await Guarded("Status.OpeningProject", async () =>
     {
         EnsureBridge();
+
+        // Opening implies connecting, the way `tia devices --project ...` does on the command
+        // line. Leaving the ordering to the operator only ever produced "Not connected. Call
+        // session.connect first." - a rule the app knows and can follow itself.
+        if (!IsConnected)
+        {
+            await ConnectCoreAsync(adoptOpenProject: false);
+            SetStatus("Status.OpeningProject");
+        }
+
         var project = await _client.OpenProjectAsync(ProjectPath);
         ProjectName = project.Name ?? string.Empty;
         Append(Loc.Current.T("Log.Opened", project.Name, project.Path));

@@ -13,16 +13,47 @@ namespace TiaOpenness.Bridge
     /// <summary>Turns one JSON-RPC request into one response, against the live session.</summary>
     public sealed class RpcDispatcher : IDisposable
     {
-        private readonly ITiaSessionFactory _factory;
+        private readonly Func<ITiaSessionFactory> _resolveFactory;
+        private ITiaSessionFactory _factory;
         private readonly Action<RpcNotification> _notify;
         private readonly JsonSerializer _serializer;
         private ITiaSession _session;
 
-        public RpcDispatcher(ITiaSessionFactory factory, Action<RpcNotification> notify)
+        /// <param name="resolveFactory">
+        /// Called to pick the backend. Invoked again on later calls while the last attempt was
+        /// unusable, so an adapter built after the bridge started is picked up without a restart.
+        /// </param>
+        public RpcDispatcher(Func<ITiaSessionFactory> resolveFactory, Action<RpcNotification> notify)
         {
-            _factory = factory;
+            _resolveFactory = resolveFactory;
             _notify = notify;
             _serializer = JsonSerializer.Create(BridgeJson.Settings);
+        }
+
+        /// <summary>
+        /// The backend, re-resolved while it is unusable.
+        ///
+        /// A failed resolution is not permanent: the two things it reports - the Openness adapter
+        /// missing, or no TIA Portal installed - are exactly what an operator goes away and fixes
+        /// while this process keeps running. Caching that failure for the life of the bridge meant
+        /// building the adapter appeared to do nothing until the whole app was restarted.
+        ///
+        /// Retrying is safe because <see cref="UnavailableSessionFactory"/> cannot produce a
+        /// session, so there is never a live session to strand by swapping it out.
+        /// </summary>
+        private ITiaSessionFactory Factory()
+        {
+            if (_factory != null && !(_factory is UnavailableSessionFactory)) return _factory;
+
+            var previous = SessionFactoryLoader.LastDecision;
+            _factory = _resolveFactory();
+
+            if (!(_factory is UnavailableSessionFactory) && previous != SessionFactoryLoader.LastDecision)
+            {
+                Console.Error.WriteLine("[bridge] backend now available: " + SessionFactoryLoader.LastDecision);
+                Console.Error.Flush();
+            }
+            return _factory;
         }
 
         public RpcResponse Handle(RpcRequest request)
@@ -78,7 +109,7 @@ namespace TiaOpenness.Bridge
             switch (method)
             {
                 case RpcMethods.Ping:
-                    return new { pong = true, mode = _factory.Mode.ToString(), decision = SessionFactoryLoader.LastDecision };
+                    return new { pong = true, mode = Factory().Mode.ToString(), decision = SessionFactoryLoader.LastDecision };
 
                 case RpcMethods.DoctorRun:
                     return OpennessDoctor.Run();
@@ -92,11 +123,11 @@ namespace TiaOpenness.Bridge
 
                 case RpcMethods.SessionDisconnect:
                     if (_session != null) { _session.Dispose(); _session = null; }
-                    return new SessionState { Connected = false, Mode = _factory.Mode };
+                    return new SessionState { Connected = false, Mode = Factory().Mode };
 
                 case RpcMethods.SessionState:
                     return _session == null
-                        ? new SessionState { Connected = false, Mode = _factory.Mode }
+                        ? new SessionState { Connected = false, Mode = Factory().Mode }
                         : _session.GetState();
 
                 case RpcMethods.ProjectOpen:
@@ -203,7 +234,7 @@ namespace TiaOpenness.Bridge
 
         private void EnsureSession()
         {
-            if (_session == null) _session = _factory.Create();
+            if (_session == null) _session = Factory().Create();
         }
 
         private ITiaSession Session()
