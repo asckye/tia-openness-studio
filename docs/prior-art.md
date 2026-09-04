@@ -14,6 +14,42 @@ What was surveyed on GitHub before building, what was taken, and what could not 
 | [Repsay/tia-openness-api-client](https://github.com/Repsay/tia-openness-api-client) | 51 | — | Python over pythonnet. Relevant only if a Python front end is added; the bridge protocol here is language-neutral, so a Python client is ~100 lines. |
 | [StaniB88/AnyAutomationStudio](https://github.com/StaniB88/AnyAutomationStudio) | 8 | closed, commercial | Competitor, not a source. Useful as a feature checklist: SCL unit tests on PLCSIM Advanced, OPC UA, multi-version V15–V21. |
 
+## Second survey, September 2026
+
+Re-run once this project had a working V21 adapter, looking specifically at the gaps in
+[roadmap.md](roadmap.md). Three of these are new and matter.
+
+| project | stars | licence | verdict |
+|---|---|---|---|
+| [Czarnak/tia-git-addin](https://github.com/Czarnak/tia-git-addin) | 11 | **MIT** | **The most valuable find.** A V21 Add-In that puts a Git panel inside TIA Portal, aware of VCI workspaces. It carries what this project does not: a native C# SimaticML parser and a **visual LAD diff** that renders old and new networks side by side. Directly complementary — this project gets the text out to Git, that one reviews it. MIT, so reusable with attribution. |
+| [EidoAut/EidoTiaWorkbench](https://github.com/EidoAut/EidoTiaWorkbench) | 0 | **MIT** | Covers the HMI gap: classic WinCC screens, templates, popups, slide-ins, HMI tag tables, connections, text lists, graphic lists, user cycles, VB scripts. V21-only, `Siemens.Engineering.WinCC.dll`, `Private=False` — the same assembly discipline used here. Worth reading before any HMI work. |
+| [Sawascwoolf/BlockParam](https://github.com/Sawascwoolf/BlockParam) | 5 | MIT, with a paid tier | Bulk editing of Data Block start values across UDT instances, with type validation and a diff preview before writing — the "batch modification" item on the roadmap, done. Note the split licence: read it before taking anything. |
+| [eliasrhoden/TiaTools](https://github.com/eliasrhoden/TiaTools) | 2 | MIT | Small Add-Ins. Useful only as an example of Add-In packaging. |
+
+### The finding worth keeping regardless of the code
+
+`tia-git-addin` published a [V21 compare API investigation](https://github.com/Czarnak/tia-git-addin/blob/main/docs/tia-v21-compare-api-investigation.md)
+done against Public API build `2100.0.121.1`, by reading the installed XML documentation and
+assembly metadata rather than by guessing. Its conclusion saves anyone else the same search:
+
+- V21 **does** expose comparison APIs, but they are *data* APIs over TIA engineering objects.
+  They return hierarchical result objects.
+- They do **not** accept VCI workspace files, SimaticML files, Git commit ids, paths, streams or
+  raw revision content — so they cannot compare two revisions of a block.
+- The graphical LAD/FBD comparison editor lives in `Siemens.Automation.CommonServices.Compare.*`,
+  which is **internal** and not part of the Public API or the Add-In contract. Using it is
+  outside the supported surface.
+
+So block diffing has to be built on your own SimaticML parser, exactly as they concluded.
+
+### Still nothing found for
+
+- Generating tag tables or data blocks from a spreadsheet. Every project that touches this writes
+  its own SimaticML by hand.
+- Running SCL against PLCSIM Advanced from open source. Only `AnyAutomationStudio` claims it, and
+  it is closed.
+- Siemens' own snippets are **still V20**, not V21, as of this survey.
+
 ## What this repository actually reuses
 
 Nothing is vendored. The reuse is at the level of technique, all of it publicly documented by
