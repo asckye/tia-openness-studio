@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -37,7 +38,7 @@ namespace TiaOpenness.Core.Abstractions
                 return new MockTiaSessionFactory();
             }
 
-            var factory = LoadAdapter();
+            var factory = LoadAdapter(opennessVersion);
             if (factory == null) return new UnavailableSessionFactory(LastDecision);
 
             try
@@ -53,29 +54,28 @@ namespace TiaOpenness.Core.Abstractions
         }
 
         /// <summary>
-        /// The instruction that actually applies here. A release package carries the adapter
-        /// sources and a compiler, so one script builds it in place; a source checkout has neither
-        /// but does have the build. Naming the wrong one sends people looking for a folder they
-        /// do not have.
+        /// The instruction that actually applies here. A release carries the adapter sources and a
+        /// compiler and builds them in place; a source checkout has neither but does have the
+        /// build. Naming the wrong one sends people looking for something they do not have.
         /// </summary>
         private static string HowToBuildAdapter()
         {
             var bridgeDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var packageRoot = string.IsNullOrEmpty(bridgeDirectory)
+            var payloadRoot = string.IsNullOrEmpty(bridgeDirectory)
                 ? null
                 : Path.GetDirectoryName(bridgeDirectory);
 
-            if (packageRoot != null && File.Exists(Path.Combine(packageRoot, "enable-openness.ps1")))
+            if (payloadRoot != null && Directory.Exists(Path.Combine(payloadRoot, "compiler")))
             {
-                return "On the machine with TIA Portal, run enable-openness.ps1 from the folder you " +
-                       "unzipped this release into; it builds the adapter in place and needs no .NET SDK.";
+                return "On the machine with TIA Portal, press Enable Openness in the app; it builds " +
+                       "the adapter against your installation and needs no .NET SDK.";
             }
 
-            return "On a machine with TIA Portal, run tools\\fetch-openness-dlls.ps1 and rebuild the solution.";
+            return "On a machine with TIA Portal, run tools\fetch-openness-dlls.ps1 and rebuild the solution.";
         }
 
         /// <summary>Returns null when the real backend cannot be used; <see cref="LastDecision"/> says why.</summary>
-        private static ITiaSessionFactory LoadAdapter()
+        private static ITiaSessionFactory LoadAdapter(string opennessVersion)
         {
             var adapterPath = Path.Combine(
                 Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".",
@@ -95,10 +95,25 @@ namespace TiaOpenness.Core.Abstractions
                 return null;
             }
 
+            // The resolver has to be in place before the adapter is even inspected. Scanning it
+            // for the factory type makes the CLR load every type in it, and their signatures
+            // mention Siemens.Engineering types that are not findable from the bridge's own
+            // folder. Installing it later - when the factory is configured - was too late, and
+            // showed up only as "unable to load one or more of the requested types".
+            try
+            {
+                Environment.OpennessAssemblyResolver.Install(opennessVersion);
+            }
+            catch (Exception ex)
+            {
+                LastDecision = "could not bind to the Openness assemblies (" + ex.Message + ")";
+                return null;
+            }
+
             try
             {
                 var assembly = Assembly.LoadFrom(adapterPath);
-                var factoryType = assembly.GetTypes()
+                var factoryType = TypesIn(assembly)
                     .FirstOrDefault(t => typeof(ITiaSessionFactory).IsAssignableFrom(t)
                                          && !t.IsAbstract && !t.IsInterface);
 
@@ -113,9 +128,47 @@ namespace TiaOpenness.Core.Abstractions
             }
             catch (Exception ex)
             {
-                LastDecision = "failed to load the Openness adapter (" + ex.GetType().Name + ": " + ex.Message + ")";
+                LastDecision = "failed to load the Openness adapter (" + Describe(ex) + ")";
                 return null;
             }
+        }
+
+        /// <summary>
+        /// The types an assembly actually managed to load. One type that cannot be resolved makes
+        /// <see cref="Assembly.GetTypes"/> throw and take the whole scan with it, even though the
+        /// factory type itself may be perfectly loadable.
+        /// </summary>
+        private static IEnumerable<Type> TypesIn(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                return ex.Types.Where(t => t != null);
+            }
+        }
+
+        /// <summary>
+        /// A message worth reading. <see cref="ReflectionTypeLoadException"/>'s own message only
+        /// says to go and look at LoaderExceptions, which is exactly where the useful part - the
+        /// name of the assembly or member that could not be found - actually is.
+        /// </summary>
+        private static string Describe(Exception ex)
+        {
+            if (!(ex is ReflectionTypeLoadException typeLoad)) return ex.GetType().Name + ": " + ex.Message;
+
+            var reasons = (typeLoad.LoaderExceptions ?? new Exception[0])
+                .Where(e => e != null)
+                .Select(e => e.Message)
+                .Distinct()
+                .Take(3)
+                .ToList();
+
+            return reasons.Count == 0
+                ? "ReflectionTypeLoadException with no loader detail"
+                : "ReflectionTypeLoadException: " + string.Join(" | ", reasons);
         }
 
         /// <summary>True when the resolved factory talks to a real TIA Portal.</summary>
