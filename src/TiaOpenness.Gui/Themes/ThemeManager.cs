@@ -28,7 +28,11 @@ public sealed class ThemeManager : INotifyPropertyChanged
     // Absolute pack URIs, naming the assembly. A relative one would be resolved against
     // Application.ResourceAssembly, which is only populated when the app is started through its
     // generated entry point - so the palette would fail to load in any other host.
-    private const string PackPrefix = "pack://application:,,,/TiaOpenness.Studio;component/Themes/";
+    //
+    // The name is read from the assembly rather than written out, because a hardcoded one turns
+    // renaming the executable into a runtime failure that only shows up when a palette loads.
+    internal static readonly string PackPrefix =
+        $"pack://application:,,,/{typeof(ThemeManager).Assembly.GetName().Name};component/Themes/";
 
     private static readonly Uri LightPalette = new(PackPrefix + "Palette.Light.xaml", UriKind.Absolute);
     private static readonly Uri DarkPalette = new(PackPrefix + "Palette.Dark.xaml", UriKind.Absolute);

@@ -64,28 +64,31 @@ jobs:
       - name: Package
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build/publish.ps1
 
-      # This runner has no TIA Portal, so it cannot verify the Openness adapter itself. What it
-      # can verify is that the package still carries everything enable-openness.ps1 needs to
-      # build that adapter on a machine that does - otherwise the release ships a dead end.
-      - name: Verify the package can enable the real backend
+      # The artifact is one file that unpacks a bridge, a compiler and the adapter sources on
+      # first run. Copying it somewhere empty and driving it over MCP proves all of that survived
+      # the single-file publish - a release whose payload is broken looks fine until someone runs it.
+      - name: Smoke-test the executable on its own
         shell: pwsh
         run: |
-          $stage = "artifacts/TiaOpennessStudio-v${{ steps.version.outputs.version }}-win-x64"
-          $required = @(
-            "$stage/enable-openness.ps1"
-            "$stage/tools/Openness.Discovery.ps1"
-            "$stage/compiler/csc.exe"
-            "$stage/bridge/TiaOpenness.Bridge.exe"
-            "$stage/bridge/TiaOpenness.Core.dll"
-            "$stage/bridge/TiaOpenness.Contracts.dll"
-            "$stage/tia.exe"
-          )
-          $missing = $required | Where-Object { -not (Test-Path $_) }
-          if ($missing) { throw "The package is missing:`n  $($missing -join "`n  ")" }
+          $exe = Get-ChildItem artifacts -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "publish.ps1 produced no executable." }
 
-          $sources = @(Get-ChildItem "$stage/adapter" -Filter *.cs -ErrorAction SilentlyContinue)
-          if ($sources.Count -eq 0) { throw "No adapter sources were staged into $stage/adapter." }
-          Write-Host "OK: $($sources.Count) adapter source(s), compiler and bridge all present."
+          $solo = Join-Path $env:RUNNER_TEMP "solo"
+          New-Item -ItemType Directory -Force -Path $solo | Out-Null
+          Copy-Item $exe.FullName (Join-Path $solo "TiaOpenness.exe")
+
+          $requests = @(
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"tia_connect","arguments":{}}}'
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"tia_open_project","arguments":{"path":"D:/demo/Line.ap21"}}}'
+            '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"tia_list_devices","arguments":{}}}'
+          ) -join "`n"
+
+          $reply = $requests | & (Join-Path $solo "TiaOpenness.exe") mcp --mock 2>$null
+          if ($reply -notmatch 'PLC_1') {
+            throw "The executable did not answer over MCP from an empty folder. Output:`n$reply"
+          }
+          Write-Host "OK: one file, unpacked its own bridge and served a project over MCP."
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -93,34 +96,31 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: TIA Openness Studio ${{ steps.version.outputs.tag }}
           body: |
-            ## Install
+            ## One file
 
-            1. Download and unzip `TiaOpennessStudio-${{ steps.version.outputs.tag }}-win-x64.zip`.
-            2. Run `TiaOpenness.Studio.exe --mock` — it works immediately. The three front ends are
-               self-contained, so no .NET runtime is needed.
+            Download `TiaOpenness-${{ steps.version.outputs.tag }}-win-x64.exe` and run it. Nothing
+            to unzip, nothing to install — the .NET runtime is inside it.
 
-            ## Connecting to a real TIA Portal — one extra step
+            - double-click, or `TiaOpenness.exe --mock` → the desktop app
+            - `TiaOpenness.exe mcp [--allow-write]` → the MCP server, for Claude / Cursor / VS Code
+
+            ## Connecting to a real TIA Portal — press "Enable Openness" once
 
             The Openness adapter **cannot ship prebuilt**. It has to be compiled against the
-            `Siemens.Engineering` assemblies, and Siemens does not permit redistributing those, so no
-            build machine without TIA Portal — this CI included — can produce it.
+            `Siemens.Engineering` assemblies, and Siemens does not permit redistributing those, so
+            no build machine without TIA Portal — this CI included — can produce it.
 
-            On the machine that has TIA Portal, run once from the unzipped folder:
+            On the machine that has TIA Portal, press **Enable Openness** in the header. It finds
+            your installation, compiles the adapter that is carried inside the executable, and the
+            next **Connect** uses it. A C# compiler is bundled, so **no .NET SDK, no Visual Studio
+            and no source clone are needed**, and there is no restart.
 
-            ```powershell
-            powershell -ExecutionPolicy Bypass -File .\enable-openness.ps1
-            ```
+            If it reports compile errors, each names a file and line in the adapter sources: this
+            build expects an Openness API your TIA version does not have. Those errors are the bug
+            report — please open an issue with them.
 
-            It finds your TIA installation, compiles the bundled adapter sources against it, and
-            writes `bridge\TiaOpenness.Openness.dll`. A C# compiler is included, so **no .NET SDK,
-            no Visual Studio and no source clone are needed**. Then check the environment:
-
-            ```powershell
-            .\tia.exe doctor
-            ```
-
-            Until that step is done, anything needing a live project fails with a message saying so
-            — it never silently falls back to the synthetic project.
+            Until that step is done, anything needing a live project fails with a message saying so.
+            It never silently falls back to the synthetic project.
 
             Supports TIA Portal V15.1 – V21, including V21's modular assembly layout.
             See [docs/deployment.md](https://github.com/asckye/tia-openness-studio/blob/main/docs/deployment.md).
@@ -129,5 +129,5 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            artifacts/*.zip
+            artifacts/*.exe
             artifacts/*.sha256

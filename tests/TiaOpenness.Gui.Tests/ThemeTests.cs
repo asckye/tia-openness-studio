@@ -17,7 +17,9 @@ namespace TiaOpenness.Gui.Tests;
 [Collection(WpfCollection.Name)]
 public class ThemeTests(WpfContext wpf)
 {
-    private const string PalettePrefix = "pack://application:,,,/TiaOpenness.Studio;component/Themes/";
+    // Taken from ThemeManager rather than repeated, so renaming the assembly cannot leave the
+    // test asserting against a URI the app no longer uses.
+    private static readonly string PalettePrefix = ThemeManager.PackPrefix;
 
     private static ResourceDictionary Palette(string file)
         => new() { Source = new Uri(PalettePrefix + file, UriKind.Absolute) };

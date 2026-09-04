@@ -114,6 +114,11 @@ namespace TiaOpenness.Bridge
                 case RpcMethods.DoctorRun:
                     return OpennessDoctor.Run();
 
+                case RpcMethods.OpennessBuild:
+                    // The next session.connect re-resolves the backend, so a successful build is
+                    // live immediately - no restart.
+                    return AdapterBuilder.Build(Str(p, "version", null));
+
                 case RpcMethods.SessionConnect:
                     EnsureSession();
                     return _session.Connect(

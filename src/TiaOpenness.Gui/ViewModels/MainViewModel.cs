@@ -100,6 +100,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         RunDoctor = new AsyncCommand(DoctorAsync);
         Connect = new AsyncCommand(ConnectAsync);
+        BuildAdapter = new AsyncCommand(BuildAdapterAsync);
         OpenProject = new AsyncCommand(OpenProjectAsync, () => ProjectPath.Length > 0);
         Refresh = new AsyncCommand(RefreshBlocksAsync, () => SelectedDevice is not null);
         Export = new AsyncCommand(ExportAsync, () => SelectedDevice is not null && OutputDirectory.Length > 0);
@@ -160,6 +161,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public AsyncCommand RunDoctor { get; }
     public AsyncCommand Connect { get; }
+    public AsyncCommand BuildAdapter { get; }
     public AsyncCommand OpenProject { get; }
     public AsyncCommand Refresh { get; }
     public AsyncCommand Export { get; }
@@ -392,6 +394,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task ConnectAsync() => await Guarded("Status.Connecting", async () =>
     {
         await ConnectCoreAsync(adoptOpenProject: true);
+    });
+
+    /// <summary>
+    /// Builds the Openness adapter against the TIA Portal on this machine - the one step that
+    /// cannot be done before shipping, because the Siemens assemblies are not redistributable.
+    /// The bridge re-checks on the next connect, so this takes effect without a restart.
+    /// </summary>
+    private async Task BuildAdapterAsync() => await Guarded("Status.BuildingAdapter", async () =>
+    {
+        EnsureBridge();
+        var result = await _client.BuildAdapterAsync();
+
+        if (result.Succeeded)
+        {
+            Append(Loc.Current.T("Log.AdapterBuilt", result.OpennessVersion,
+                result.ReferencedAssemblies, result.OutputPath));
+            SetStatus("Status.AdapterBuilt", result.OpennessVersion);
+            return;
+        }
+
+        foreach (var error in result.Errors) Append(error);
+        Append(Loc.Current["Log.AdapterHint"]);
+        SetStatus("Status.AdapterFailed", result.OpennessVersion, result.Errors.Count);
     });
 
     /// <summary>

@@ -1,15 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- WinExe so a double-click does not flash a console window. The command-line and MCP modes
+         attach or allocate one themselves; see Program.AttachConsole. -->
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>TiaOpenness.Gui</RootNamespace>
-    <AssemblyName>TiaOpenness.Studio</AssemblyName>
+    <AssemblyName>TiaOpenness</AssemblyName>
     <RollForward>LatestMajor</RollForward>
     <Nullable>enable</Nullable>
+
+    <!-- WPF generates its own Main from App.xaml. Naming ours explicitly makes it the entry point
+         instead, without having to stop that generation. -->
+    <StartupObject>TiaOpenness.Gui.Program</StartupObject>
   </PropertyGroup>
+
+  <!--
+    The desktop app and the MCP server are one executable. As separate exes each carried its own
+    copy of the self-contained .NET runtime, so the package shipped it more than once.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\TiaOpenness.Client\TiaOpenness.Client.csproj" />
+    <ProjectReference Include="..\TiaOpenness.Mcp\TiaOpenness.Mcp.csproj" />
   </ItemGroup>
+
   <Import Project="$(RepoRoot)build\BridgeDeploy.targets" />
+  <Import Project="$(RepoRoot)build\EmbedToolchain.targets" />
 </Project>

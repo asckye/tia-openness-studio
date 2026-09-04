@@ -67,6 +67,10 @@
 
           <Button Content="{l:Tr Toolbar.Doctor}" ToolTip="{l:Tr Toolbar.Doctor.Tip}"
                   Command="{Binding RunDoctor}" />
+          <!-- The one-time step Siemens' licensing forces on every install: the adapter has to be
+               compiled here, against the TIA Portal on this machine. -->
+          <Button Content="{l:Tr Toolbar.Enable}" ToolTip="{l:Tr Toolbar.Enable.Tip}"
+                  Command="{Binding BuildAdapter}" />
           <Button Content="{l:Tr Toolbar.Connect}" ToolTip="{l:Tr Toolbar.Connect.Tip}"
                   Style="{StaticResource Ui.Button.Primary}" Command="{Binding Connect}"
                   Margin="0" />

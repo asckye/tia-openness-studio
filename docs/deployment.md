@@ -7,11 +7,11 @@ Everything below is what has to be true on the machine that has V21.
 
 | requirement | check | fix |
 |---|---|---|
-| TIA Portal V15.1+ with the **Openness** option | `tia doctor` → `TIA-INSTALL` | Re-run the TIA setup and tick Openness |
-| .NET Framework 4.8 runtime | `tia doctor` → `ENV-NETFX` | Ships with Windows 10 1903+; otherwise install it |
+| TIA Portal V15.1+ with the **Openness** option | **Doctor** → `TIA-INSTALL` | Re-run the TIA setup and tick Openness |
+| .NET Framework 4.8 runtime | **Doctor** → `ENV-NETFX` | Ships with Windows 10 1903+; otherwise install it |
 | .NET 10 SDK — **only if building from source** | `dotnet --info` | https://dot.net. A release package needs none: the front ends are self-contained and the adapter is built by the bundled compiler |
-| Membership of the local group `Siemens TIA Openness` | `tia doctor` → `TIA-GROUP` | See below |
-| x64 process | `tia doctor` → `ENV-BITNESS` | Already enforced by the build |
+| Membership of the local group `Siemens TIA Openness` | **Doctor** → `TIA-GROUP` | See below |
+| x64 process | **Doctor** → `ENV-BITNESS` | Already enforced by the build |
 
 ### The group is the one people get wrong
 
@@ -21,7 +21,7 @@ net localgroup "Siemens TIA Openness" "%USERDOMAIN%\%USERNAME%" /add
 
 Run it **as Administrator**, then **log off and log back on**. Group membership is baked into
 the logon token; until you get a new token, Openness fails with a COM error that says nothing
-about groups. `tia doctor` checks the current token, not the group's member list, so it tells
+about groups. Doctor checks the current token, not the group's member list, so it tells
 you the truth about whether the log-off actually happened.
 
 ## 2. Get the binaries
@@ -29,26 +29,23 @@ you the truth about whether the log-off actually happened.
 Two routes. Both end with the same thing: an Openness adapter compiled against *your* TIA
 installation, because that adapter cannot be prebuilt by anyone else.
 
-### A. From a release package — recommended, no SDK
+### A. From a release — recommended, no SDK
 
-Download and unzip the [latest release](https://github.com/asckye/tia-openness-studio/releases/latest),
-then run once:
+Download `TiaOpenness-v<version>-win-x64.exe` from the
+[latest release](https://github.com/asckye/tia-openness-studio/releases/latest). That is the whole
+product: nothing to unzip, nothing to install. Run it and press **Enable Openness** in the header,
+once.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\enable-openness.ps1
-```
+It finds your TIA installation, compiles the adapter sources carried inside the executable against
+its assemblies using the bundled C# compiler, and writes the result next to the unpacked bridge in
+`%LOCALAPPDATA%\TiaOpenness\<version>\bridge\`. The next **Connect** uses it — no restart.
 
-It finds your TIA installation, compiles `adapter\*.cs` against its assemblies with the compiler
-in `compiler\`, and writes `bridge\TiaOpenness.Openness.dll`. Useful switches:
+If it reports compile errors, each one names a file and line in the adapter sources. That means
+this build expects an Openness API your TIA version does not have; the errors are the bug report,
+so please open an issue with them.
 
-| switch | when |
-|---|---|
-| `-TiaPortalLocation 'D:\Siemens\Automation\Portal V21'` | The install is somewhere the search does not reach |
-| `-Version 21.0` | More than one TIA version is installed |
-| `-Force` | Rebuild after upgrading TIA Portal |
-
-If it reports compile errors, each one names a file and line in `adapter\`. That means this
-build expects an Openness API your TIA version does not have — the errors are the bug report.
+Rebuild after upgrading TIA Portal by pressing the button again. A new release unpacks into its
+own version folder, so upgrading the app never reuses an adapter built for a different one.
 
 ### B. From source
 
@@ -65,25 +62,16 @@ Once that file exists, `TiaOpenness.Bridge` picks up a project reference to
 still builds; the bridge then refuses a real session with a message naming this step, and
 `--mock` still works — which is how CI on a machine without TIA Portal stays green.
 
-Verify which backend you got:
-
-```bash
-tia doctor
-```
-
-The first stderr line of the bridge says `mode=Openness` or `mode=Mock` and why.
+Verify which backend you got by pressing **Doctor**. The bridge's first log line says
+`mode=Openness` or `mode=Mock` and why.
 
 ## 3. First connection
 
-Connect **once with the user interface visible**:
-
-```bash
-tia devices --project D:\projects\Line.ap21
-```
+Press **Connect** once **with the TIA window visible** — leave *Headless* unticked.
 
 TIA Portal shows a security dialog the first time an unknown application connects. Accept it.
-A headless session (`--headless`, or `withUserInterface: false`) cannot display that dialog and
-will appear to hang instead. After it has been accepted once, headless runs work.
+A headless session cannot display that dialog and will appear to hang instead. After it has been
+accepted once on that machine under that user account, headless runs work.
 
 ## 4. Errors you will actually hit
 
@@ -91,38 +79,35 @@ will appear to hang instead. After it has been accepted once, headless runs work
 |---|---|---|
 | `Retrieving the COM class factory ... 80040154` | Not in the Openness group, or no log-off since being added | See §1 |
 | Connect hangs forever, no window | Headless connect before the trust dialog was ever accepted | Connect once with the UI |
+| `TiaOpenness.Openness.dll is not deployed next to the bridge` | The adapter has not been built on this machine | Press **Enable Openness** |
 | `EngineeringTargetInvocationException` on export | Block is inconsistent | Compile the device first; the export result names the block |
 | Export fails on one block only | Know-how protection | Remove protection in TIA, or exclude the block |
-| `Could not load file or assembly 'Siemens.Engineering'` | The resolver bound a version that is not installed, or lib was built from a different TIA version | `tia doctor` lists what *is* installed and which layout; re-run fetch-openness-dlls.ps1 from the right version |
+| `Could not load file or assembly 'Siemens.Engineering'` | The adapter was built against a version that is no longer installed | Doctor lists what *is* installed and which layout; press **Enable Openness** again |
 | `Access to a disposed object of type Workspace` | A version-control call outlived the service it came from | Fixed in the adapter by rooting the proxies; report it if it reappears |
-| `Synchronize cannot be called on a workspace mapping ... equal` | Something asked TIA to sync an in-sync object | Not reachable through this tool - equal objects are skipped by design |
+| `Synchronize cannot be called on a workspace mapping ... equal` | Something asked TIA to sync an in-sync object | Not reachable through this tool — equal objects are skipped by design |
 | Bridge exits immediately | x86 host process | The bridge is `PlatformTarget=x64`; do not override it |
-| Two TIA versions needed at once | One AppDomain binds one version | Run two bridges; pass `--bridge` to each front end |
 
 ## 5. Running unattended
 
+The MCP server is the unattended surface:
+
 ```bash
-tia compile --project D:\p\Line.ap21 --device PLC_1 --headless
+TiaOpenness.exe mcp --allow-write
 ```
 
-Exit code `1` on a compiler error, so CI fails without parsing output. Two caveats for
-unattended runs:
+Two caveats:
 
 - The trust dialog must have been accepted on that machine, under **that user account**, before.
 - TIA Portal is single-threaded per instance. Run one bridge per project; do not fan out.
 
 ## 6. Version control (V21 only)
 
-The Version Control Interface is exposed as `tia vci`, a tab in the desktop app, and six MCP
-tools. Verify it early, because it is the one feature that silently does not exist on V20:
+The Version Control Interface is the *Version control* tab, plus six MCP tools. Check it early,
+because it is the one feature that silently does not exist on V20: on an older TIA the tab
+disables itself and says so, rather than failing when a button is pressed.
 
-```bash
-tia vci workspaces --project D:\projects\Line.ap21
-```
-
-An older TIA answers with a clear message rather than an error, and the desktop tab disables
-itself. See [version-control.md](version-control.md) for the full loop and the API rules it has
-to work around.
+See [version-control.md](version-control.md) for the full loop and the API rules it has to work
+around.
 
 ## 7. What is not covered yet
 

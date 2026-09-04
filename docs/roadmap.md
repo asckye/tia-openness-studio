@@ -11,7 +11,8 @@ Against the four problem areas that were prioritised at the start.
 | **Project inspection** | `InspectionEngine` with five rules — naming convention (regex), missing block author, inconsistent blocks, know-how protection, unreferenced blocks. Shared by both backends so the mock and the real session give identical verdicts for identical metadata. |
 | **Compile diagnostics** | Compile a device, structured messages with severity/target/error code, exit code 1 on error so CI fails without parsing text. |
 | **Environment** | `OpennessDoctor` — seven checks, each with the exact command that fixes it. Checks group membership against the *access token*, so "added but never logged off" is reported correctly, and reports whether the installation is the V21 modular layout or the older monolithic one. |
-| **Front ends** | Desktop app (Blocks and Version control tabs), CLI, MCP server, all over one bridge. MCP hides the five mutating tools unless started with `--allow-write`. |
+| **Front ends** | One executable: the desktop app (Blocks and Version control tabs) and, as `TiaOpenness.exe mcp`, the MCP server. Both over the same bridge, which the exe unpacks from inside itself. MCP hides the five mutating tools unless started with `--allow-write`. |
+| **Deployment** | A single self-contained exe. The bridge, a C# compiler and the Openness adapter's sources ride inside it, so **Enable Openness** builds the real backend on the target machine with no .NET SDK, no unzipping and no restart. |
 
 ## Written but not yet executed against TIA Portal
 
@@ -36,9 +37,9 @@ Where it is most likely to need adjustment on first contact with V21:
 - **VCI sub-folders.** Some builds reject a relative directory. The mapper tries a sub-folder and
   falls back to a flat root layout; which path is taken on your build is worth checking once.
 
-First run on the V21 machine should be, in order: `tia doctor` → `tia devices` → `tia blocks`
-→ `tia export --format SimaticMl` on one block → `tia compile` → `tia vci workspaces`
-→ `tia vci map` (dry run first).
+First run on the V21 machine should be, in order: **Enable Openness** → **Doctor** → **Connect**
+→ open a project → export one block → **Compile** → the *Version control* tab → **Map project**
+with *Dry run* still ticked.
 
 ## Not started
 

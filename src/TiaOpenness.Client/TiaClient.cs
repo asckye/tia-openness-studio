@@ -34,6 +34,16 @@ namespace TiaOpenness.Client
             return _bridge.CallAsync<DoctorReport>(RpcMethods.DoctorRun, null, ct);
         }
 
+        /// <summary>
+        /// Builds the Openness adapter against the TIA Portal installed on this machine - the one
+        /// step that cannot be done before shipping, because the Siemens assemblies it compiles
+        /// against are not redistributable. The next <see cref="ConnectAsync"/> picks it up.
+        /// </summary>
+        public Task<AdapterBuildResult> BuildAdapterAsync(string version = null, CancellationToken ct = default)
+        {
+            return _bridge.CallAsync<AdapterBuildResult>(RpcMethods.OpennessBuild, new { version }, ct);
+        }
+
         public Task<SessionState> ConnectAsync(bool withUserInterface = true, bool attachToRunning = true,
             string version = null, CancellationToken ct = default)
         {

@@ -112,6 +112,18 @@ namespace TiaOpenness.Client
         /// <summary>Looks for the bridge next to the caller, then in the usual build output folders.</summary>
         public static string LocateBridge()
         {
+            // The shipped product is a single exe with the bridge inside it, so the payload comes
+            // first. The paths below are for running out of a build tree, where nothing is embedded.
+            try
+            {
+                var embedded = ToolchainPayload.EnsureExtracted();
+                if (embedded != null && File.Exists(embedded)) return embedded;
+            }
+            catch (Exception)
+            {
+                // An unwritable extraction folder is not fatal while a build-tree bridge exists.
+            }
+
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
             var candidates = new[]
             {

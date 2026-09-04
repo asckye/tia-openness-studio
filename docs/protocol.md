@@ -58,6 +58,13 @@ TiaOpenness.Bridge.exe [--mock] [--openness-version 21.0] [--doctor]
 | `vc.map` | `workspaceName`, `deviceId`, `dryRun` | `MappingResult` |
 | `vc.status` | `workspaceName`, `changedOnly` | `WorkspaceStatusReport` |
 | `vc.sync` | `workspaceName`, `direction`, `dryRun` | `SyncResult` |
+| `openness.build` | `version` | `AdapterBuildResult` |
+
+`openness.build` compiles the Openness adapter against the TIA Portal installed on this machine
+and writes it next to the bridge. It is the one step that cannot happen before shipping, because
+the Siemens assemblies it compiles against are not redistributable. The next `session.connect`
+picks the result up: a failed backend resolution is retried rather than cached, so nothing has to
+be restarted.
 
 `blocks[]` empty or absent means *all blocks*. Block addresses are the slash-separated path
 shown by `block.list`, e.g. `Motion/FB_Axis`; a bare block name also resolves when unambiguous.

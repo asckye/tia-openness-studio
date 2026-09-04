@@ -13,7 +13,7 @@ public partial class App : Application
     /// <summary>Where the crash log lands, so a field failure can be sent back as one file.</summary>
     public static string CrashLogPath { get; } = Path.Combine(
         Path.GetDirectoryName(Environment.ProcessPath) ?? Path.GetTempPath(),
-        "TiaOpenness.Studio.crash.log");
+        (System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "TiaOpenness") + ".crash.log");
 
     /// <summary>Language and appearance as they were left last time.</summary>
     public static UiSettings Settings { get; private set; } = new();

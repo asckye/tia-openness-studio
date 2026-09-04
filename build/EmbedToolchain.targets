@@ -1,0 +1,58 @@
+<Project>
+  <!--
+    Embeds everything the app needs to reach a real TIA Portal into the executable itself, so the
+    product is one file:
+
+      payload/bridge/*    the .NET Framework 4.8 bridge, which cannot be merged into a .NET 10 exe
+                          because the Siemens assemblies it loads are .NET Framework only
+      payload/adapter/*   the Openness adapter's sources, which cannot ship compiled because the
+                          Siemens assemblies are not redistributable
+      payload/compiler/*  a C# compiler, so the machine with TIA Portal needs no .NET SDK to build
+                          that adapter
+
+    ToolchainPayload extracts them beside the exe on first use.
+  -->
+
+  <PropertyGroup>
+    <ToolchainStage>$(BaseIntermediateOutputPath)toolchain\</ToolchainStage>
+    <CompilerStage>$(ToolchainStage)compiler\</CompilerStage>
+    <AdapterSourceDir>$(RepoRoot)src\TiaOpenness.Openness\</AdapterSourceDir>
+  </PropertyGroup>
+
+  <!--
+    Downloaded once and cached in obj\, because it comes from nuget.org and a build should not
+    need the network every time. Delete obj\toolchain to force a refresh.
+  -->
+  <Target Name="StageCompiler" Condition="!Exists('$(CompilerStage)csc.exe')">
+    <Message Importance="high" Text="Staging the bundled C# compiler (first build only)" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RepoRoot)build\fetch-compiler.ps1&quot; -Destination &quot;$(CompilerStage.TrimEnd('\'))&quot;" />
+  </Target>
+
+  <!--
+    Runs before the compiler reads the item list, and after BuildBridge (from BridgeDeploy.targets)
+    has produced the bridge output this embeds.
+  -->
+  <Target Name="EmbedToolchain"
+          BeforeTargets="BeforeResolveReferences"
+          DependsOnTargets="BuildBridge;StageCompiler">
+
+    <ItemGroup>
+      <ToolchainBridge Include="$(BridgeOutDir)*.*" Exclude="$(BridgeOutDir)*.pdb" />
+      <ToolchainCompiler Include="$(CompilerStage)*.*" />
+      <ToolchainAdapter Include="$(AdapterSourceDir)*.cs" />
+    </ItemGroup>
+
+    <Error Condition="'@(ToolchainBridge)' == ''" Text="No bridge output at $(BridgeOutDir) to embed." />
+    <Error Condition="'@(ToolchainCompiler)' == ''" Text="No compiler staged at $(CompilerStage) to embed." />
+    <Error Condition="'@(ToolchainAdapter)' == ''" Text="No adapter sources at $(AdapterSourceDir) to embed." />
+
+    <ItemGroup>
+      <EmbeddedResource Include="@(ToolchainBridge)" LogicalName="payload/bridge/%(Filename)%(Extension)" />
+      <EmbeddedResource Include="@(ToolchainCompiler)" LogicalName="payload/compiler/%(Filename)%(Extension)" />
+      <EmbeddedResource Include="@(ToolchainAdapter)" LogicalName="payload/adapter/%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <Message Importance="normal"
+             Text="Embedded @(ToolchainBridge->Count()) bridge, @(ToolchainCompiler->Count()) compiler and @(ToolchainAdapter->Count()) adapter file(s)." />
+  </Target>
+</Project>

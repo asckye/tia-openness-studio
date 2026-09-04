@@ -12,7 +12,7 @@ namespace TiaOpenness.Mcp;
 /// </summary>
 public static class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static async Task<int> RunAsync(string[] args)
     {
         if (args.Any(a => a is "-h" or "--help"))
         {
