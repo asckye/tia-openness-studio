@@ -1,5 +1,4 @@
-| **Block-level diff beyond text** | The workspace diff is Git's, over the exported text. A semantic or LAD diff needs an own SimaticML parser: V21's compare API is a data API that does not accept files or revisions, and its graphical comparer is internal. See [prior-art.md](prior-art.md). |
-| **Batch code generation from Excel**# Status and roadmap
+# Status and roadmap
 
 Against the four problem areas that were prioritised at the start.
 
@@ -49,7 +48,8 @@ with *Dry run* still ticked.
 | **Batch code generation from Excel** | Tag tables and data blocks from a spreadsheet. Needs a source-text generator; the import path it would feed already exists. |
 | **Batch modification** | Rename, re-comment, renumber across many blocks. Openness allows it; the risk is that it is destructive, so it needs the same dry-run gate the VCI commands have. |
 | **Automated testing** | Compile-only regression works today. Running logic against PLCSIM Advanced is a separate API and a separate install. |
-| **HMI / WinCC Unified** | The HMI assemblies are fetched but unused. Device categorisation already recognises HMI targets by type name so the adapter does not need them at compile time. |
+| **HMI beyond classic WinCC** | Classic screens, templates, popups, slide-ins and HMI tag tables list and export. WinCC Unified is a different object model and is not covered. |
+| **Block-level diff beyond text** | The workspace diff is Git's, over the exported text. A semantic or LAD diff needs an own SimaticML parser: V21's compare API is a data API that accepts neither files nor revisions, and its graphical comparer is internal. See [prior-art.md](prior-art.md). |
 | **TIA Portal add-in** | `src/TiaOpenness.AddIn` is reserved. An add-in runs inside TIA, so it would reference `TiaOpenness.Core` directly and skip the bridge entirely. |
 | **Multi-version in one UI** | The protocol supports it (one bridge per version); the front ends currently start exactly one. |
 
