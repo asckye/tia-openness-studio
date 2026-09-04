@@ -9,7 +9,7 @@ Everything below is what has to be true on the machine that has V21.
 |---|---|---|
 | TIA Portal V15.1+ with the **Openness** option | `tia doctor` → `TIA-INSTALL` | Re-run the TIA setup and tick Openness |
 | .NET Framework 4.8 runtime | `tia doctor` → `ENV-NETFX` | Ships with Windows 10 1903+; otherwise install it |
-| .NET 10 SDK (to build) / runtime (to run the front ends) | `dotnet --info` | https://dot.net |
+| .NET 10 SDK — **only if building from source** | `dotnet --info` | https://dot.net. A release package needs none: the front ends are self-contained and the adapter is built by the bundled compiler |
 | Membership of the local group `Siemens TIA Openness` | `tia doctor` → `TIA-GROUP` | See below |
 | x64 process | `tia doctor` → `ENV-BITNESS` | Already enforced by the build |
 
@@ -24,11 +24,37 @@ the logon token; until you get a new token, Openness fails with a COM error that
 about groups. `tia doctor` checks the current token, not the group's member list, so it tells
 you the truth about whether the log-off actually happened.
 
-## 2. Build
+## 2. Get the binaries
+
+Two routes. Both end with the same thing: an Openness adapter compiled against *your* TIA
+installation, because that adapter cannot be prebuilt by anyone else.
+
+### A. From a release package — recommended, no SDK
+
+Download and unzip the [latest release](https://github.com/asckye/tia-openness-studio/releases/latest),
+then run once:
 
 ```powershell
-git clone <this repo>
-cd openness
+powershell -ExecutionPolicy Bypass -File .\enable-openness.ps1
+```
+
+It finds your TIA installation, compiles `adapter\*.cs` against its assemblies with the compiler
+in `compiler\`, and writes `bridge\TiaOpenness.Openness.dll`. Useful switches:
+
+| switch | when |
+|---|---|
+| `-TiaPortalLocation 'D:\Siemens\Automation\Portal V21'` | The install is somewhere the search does not reach |
+| `-Version 21.0` | More than one TIA version is installed |
+| `-Force` | Rebuild after upgrading TIA Portal |
+
+If it reports compile errors, each one names a file and line in `adapter\`. That means this
+build expects an Openness API your TIA version does not have — the errors are the bug report.
+
+### B. From source
+
+```powershell
+git clone https://github.com/asckye/tia-openness-studio
+cd tia-openness-studio
 powershell -ExecutionPolicy Bypass -File tools\fetch-openness-dlls.ps1
 dotnet build TiaOpenness.slnx -c Release
 ```

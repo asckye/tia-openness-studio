@@ -58,6 +58,13 @@ $publishArgs = @(
     "-o", $stage
 )
 
+# The bridge is built by an MSBuild task from BridgeDeploy.targets, not as a project reference,
+# so `dotnet publish` never restores it. Restore the solution first or a clean checkout fails
+# with NETSDK1004 the moment that nested build runs.
+Write-Host "==> dotnet restore" -ForegroundColor Cyan
+& dotnet restore (Join-Path $root "TiaOpenness.slnx")
+if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)." }
+
 foreach ($project in "TiaOpenness.Gui", "TiaOpenness.Cli", "TiaOpenness.Mcp") {
     Write-Host "==> dotnet publish $project" -ForegroundColor Cyan
     & dotnet publish (Join-Path $root "src\$project\$project.csproj") @publishArgs
@@ -73,6 +80,26 @@ Copy-Item (Join-Path $root "README.md") $stage
 Copy-Item (Join-Path $root "LICENSE") $stage
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "docs") | Out-Null
 Copy-Item (Join-Path $root "docs\*.md") (Join-Path $stage "docs")
+
+# ---- what makes the real backend reachable from a release --------------------
+#
+# TiaOpenness.Openness.dll cannot ship prebuilt: it has to be compiled against the Siemens
+# assemblies, and those are not redistributable, so no build machine without TIA Portal - this
+# one included - can produce it. Instead the package carries the adapter sources and a C#
+# compiler, and enable-openness.ps1 compiles them in place on the engineering workstation.
+# That keeps it a single command there: no .NET SDK, no Visual Studio, no source clone.
+
+Write-Host "==> Staging the Openness adapter sources" -ForegroundColor Cyan
+New-Item -ItemType Directory -Force -Path (Join-Path $stage "adapter") | Out-Null
+Copy-Item (Join-Path $root "src\TiaOpenness.Openness\*.cs") (Join-Path $stage "adapter")
+
+New-Item -ItemType Directory -Force -Path (Join-Path $stage "tools") | Out-Null
+Copy-Item (Join-Path $root "tools\Openness.Discovery.ps1") (Join-Path $stage "tools")
+Copy-Item (Join-Path $root "tools\enable-openness.ps1") $stage
+
+Write-Host "==> Staging the C# compiler" -ForegroundColor Cyan
+& (Join-Path $PSScriptRoot "fetch-compiler.ps1") -Destination (Join-Path $stage "compiler")
+if ($LASTEXITCODE -ne 0) { throw "Staging the compiler failed (exit $LASTEXITCODE)." }
 
 Write-Host "==> Zipping" -ForegroundColor Cyan
 Add-Type -AssemblyName System.IO.Compression.FileSystem

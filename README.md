@@ -87,7 +87,28 @@ a filled amber button is the one action a row exists for, soft amber is an impor
 is not that row's purpose, and everything else is outlined or a plain link. Paths, versions and
 counts are set in a monospace face so a backslash or an underscore is never ambiguous.
 
-### Against a real TIA Portal
+### From a release package
+
+Download and unzip the [latest release](https://github.com/asckye/tia-openness-studio/releases/latest).
+The three front ends are self-contained — no .NET runtime needed — and `--mock` works straight away.
+
+To connect to a real TIA Portal, run this once on the machine that has it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\enable-openness.ps1
+```
+
+That is the one step that cannot be done for you. `TiaOpenness.Openness.dll` must be compiled
+against the `Siemens.Engineering` assemblies, and Siemens does not permit redistributing them, so
+no build machine without TIA Portal — including this project's CI — can produce it. The package
+therefore carries the adapter sources and a C# compiler, and the script compiles them in place:
+**no .NET SDK, no Visual Studio, no source clone**.
+
+Because it compiles the real typed adapter against the real assemblies, an API this TIA version
+does not have becomes a compile error naming the file and line, rather than an obscure failure at
+run time later.
+
+### Building from source against a real TIA Portal
 
 1. Install TIA Portal V21 **with the Openness option**.
 2. Add your Windows account to the local group and **log off and back on** (a group only takes

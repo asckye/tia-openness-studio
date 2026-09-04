@@ -64,13 +64,67 @@ jobs:
       - name: Package
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build/publish.ps1
 
+      # This runner has no TIA Portal, so it cannot verify the Openness adapter itself. What it
+      # can verify is that the package still carries everything enable-openness.ps1 needs to
+      # build that adapter on a machine that does - otherwise the release ships a dead end.
+      - name: Verify the package can enable the real backend
+        shell: pwsh
+        run: |
+          $stage = "artifacts/TiaOpennessStudio-v${{ steps.version.outputs.version }}-win-x64"
+          $required = @(
+            "$stage/enable-openness.ps1"
+            "$stage/tools/Openness.Discovery.ps1"
+            "$stage/compiler/csc.exe"
+            "$stage/bridge/TiaOpenness.Bridge.exe"
+            "$stage/bridge/TiaOpenness.Core.dll"
+            "$stage/bridge/TiaOpenness.Contracts.dll"
+            "$stage/tia.exe"
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "The package is missing:`n  $($missing -join "`n  ")" }
+
+          $sources = @(Get-ChildItem "$stage/adapter" -Filter *.cs -ErrorAction SilentlyContinue)
+          if ($sources.Count -eq 0) { throw "No adapter sources were staged into $stage/adapter." }
+          Write-Host "OK: $($sources.Count) adapter source(s), compiler and bridge all present."
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: TIA Openness Studio ${{ steps.version.outputs.tag }}
-          # Keep whatever notes the tag or an earlier draft already carries, and let GitHub add
-          # the commit list underneath rather than hand-maintaining one here.
+          body: |
+            ## Install
+
+            1. Download and unzip `TiaOpennessStudio-${{ steps.version.outputs.tag }}-win-x64.zip`.
+            2. Run `TiaOpenness.Studio.exe --mock` — it works immediately. The three front ends are
+               self-contained, so no .NET runtime is needed.
+
+            ## Connecting to a real TIA Portal — one extra step
+
+            The Openness adapter **cannot ship prebuilt**. It has to be compiled against the
+            `Siemens.Engineering` assemblies, and Siemens does not permit redistributing those, so no
+            build machine without TIA Portal — this CI included — can produce it.
+
+            On the machine that has TIA Portal, run once from the unzipped folder:
+
+            ```powershell
+            powershell -ExecutionPolicy Bypass -File .\enable-openness.ps1
+            ```
+
+            It finds your TIA installation, compiles the bundled adapter sources against it, and
+            writes `bridge\TiaOpenness.Openness.dll`. A C# compiler is included, so **no .NET SDK,
+            no Visual Studio and no source clone are needed**. Then check the environment:
+
+            ```powershell
+            .\tia.exe doctor
+            ```
+
+            Until that step is done, anything needing a live project fails with a message saying so
+            — it never silently falls back to the synthetic project.
+
+            Supports TIA Portal V15.1 – V21, including V21's modular assembly layout.
+            See [docs/deployment.md](https://github.com/asckye/tia-openness-studio/blob/main/docs/deployment.md).
+          # The commit list is appended under the notes above rather than hand-maintained here.
           generate_release_notes: true
           draft: false
           prerelease: false

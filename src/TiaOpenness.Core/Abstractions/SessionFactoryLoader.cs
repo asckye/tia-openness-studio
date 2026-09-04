@@ -52,6 +52,28 @@ namespace TiaOpenness.Core.Abstractions
             }
         }
 
+        /// <summary>
+        /// The instruction that actually applies here. A release package carries the adapter
+        /// sources and a compiler, so one script builds it in place; a source checkout has neither
+        /// but does have the build. Naming the wrong one sends people looking for a folder they
+        /// do not have.
+        /// </summary>
+        private static string HowToBuildAdapter()
+        {
+            var bridgeDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var packageRoot = string.IsNullOrEmpty(bridgeDirectory)
+                ? null
+                : Path.GetDirectoryName(bridgeDirectory);
+
+            if (packageRoot != null && File.Exists(Path.Combine(packageRoot, "enable-openness.ps1")))
+            {
+                return "On the machine with TIA Portal, run enable-openness.ps1 from the folder you " +
+                       "unzipped this release into; it builds the adapter in place and needs no .NET SDK.";
+            }
+
+            return "On a machine with TIA Portal, run tools\\fetch-openness-dlls.ps1 and rebuild the solution.";
+        }
+
         /// <summary>Returns null when the real backend cannot be used; <see cref="LastDecision"/> says why.</summary>
         private static ITiaSessionFactory LoadAdapter()
         {
@@ -62,8 +84,7 @@ namespace TiaOpenness.Core.Abstractions
             if (!File.Exists(adapterPath))
             {
                 LastDecision = OpennessAdapterAssembly + ".dll is not deployed next to the bridge. " +
-                               "Run tools\\fetch-openness-dlls.ps1 on a machine with TIA Portal and rebuild, " +
-                               "or pass --mock to use the synthetic project.";
+                               HowToBuildAdapter() + " Or pass --mock to use the synthetic project.";
                 return null;
             }
 

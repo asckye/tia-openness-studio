@@ -22,7 +22,10 @@
   <Target Name="CopyBridge" AfterTargets="Build" DependsOnTargets="BuildBridge"
           Condition="'$(SkipBridgeDeploy)' != 'true'">
     <ItemGroup>
-      <BridgeFiles Include="$(BridgeOutDir)**\*" />
+      <!-- Flat, not recursive: the net48 bridge output has no subdirectories of its own, so a
+           nested folder there is stale output from an earlier build and copying it would ship a
+           second, unreachable copy of the bridge. -->
+      <BridgeFiles Include="$(BridgeOutDir)*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(BridgeFiles)"
           DestinationFiles="@(BridgeFiles->'$(OutDir)bridge\%(RecursiveDir)%(Filename)%(Extension)')"
@@ -39,7 +42,7 @@
   <Target Name="PublishBridge" AfterTargets="Publish" DependsOnTargets="BuildBridge"
           Condition="'$(SkipBridgeDeploy)' != 'true'">
     <ItemGroup>
-      <BridgePublishFiles Include="$(BridgeOutDir)**\*" Exclude="$(BridgeOutDir)**\*.pdb" />
+      <BridgePublishFiles Include="$(BridgeOutDir)*.*" Exclude="$(BridgeOutDir)*.pdb" />
     </ItemGroup>
     <Copy SourceFiles="@(BridgePublishFiles)"
           DestinationFiles="@(BridgePublishFiles->'$(PublishDir)bridge\%(RecursiveDir)%(Filename)%(Extension)')"
