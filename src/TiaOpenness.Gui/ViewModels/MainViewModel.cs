@@ -67,6 +67,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _isConnected;
     private bool _isVcTab;
     private bool _logExpanded = true;
+    private bool _suppressDeviceLoad;
     private int _progressValue;
     private int _progressMax;
 
@@ -142,6 +143,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         foreach (var row in Blocks) row.RefreshLocalizedText();
+
+        // The tree carries TIA's category names, which are captured when it is built.
+        RebuildTree();
     }
 
     private void OnBlocksChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -155,6 +159,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<DeviceInfo> Devices { get; } = [];
     public ObservableCollection<BlockRow> Blocks { get; }
     public ICollectionView BlocksView { get; }
+
+    /// <summary>The blocks as TIA shows them: its categories, then the engineer's own folders.</summary>
+    public ObservableCollection<BlockNode> BlockTree { get; } = [];
 
     public ObservableCollection<WorkspaceInfo> Workspaces { get; } = [];
     public ObservableCollection<MappedObjectInfo> VcStatusItems { get; } = [];
@@ -298,7 +305,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string BlockFilter
     {
         get => _blockFilter;
-        set { if (Set(ref _blockFilter, value)) BlocksView.Refresh(); }
+        set
+        {
+            if (!Set(ref _blockFilter, value)) return;
+            BlocksView.Refresh();
+            RebuildTree();
+        }
     }
 
     /// <summary>False on TIA Portal below V21, which has no Version Control Interface.</summary>
@@ -353,7 +365,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 command.RaiseCanExecuteChanged();
             }
-            if (value is not null) _ = RefreshBlocksAsync();
+            // A device picked in the list loads its blocks. Suppressed while the app selects one
+            // itself, where the caller awaits the load instead of racing this fire-and-forget one.
+            if (value is not null && !_suppressDeviceLoad) _ = RefreshBlocksAsync();
         }
     }
 
@@ -477,8 +491,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
 
-        SelectedDevice = Devices.FirstOrDefault(d => d.Category == "Plc") ?? Devices.FirstOrDefault();
         Append(Loc.Current.T("Log.DeviceCount", devices.Count));
+
+        // Pick a device and load its blocks as one awaited step. Letting the property setter
+        // start that load meant a fire-and-forget task racing the rest of this method, and on a
+        // real project - where reading blocks takes seconds - it looked like nothing had loaded
+        // until Reload was pressed.
+        _suppressDeviceLoad = true;
+        try
+        {
+            SelectedDevice = Devices.FirstOrDefault(d => d.Category == "Plc") ?? Devices.FirstOrDefault();
+        }
+        finally
+        {
+            _suppressDeviceLoad = false;
+        }
+
+        if (SelectedDevice is not null) await RefreshBlocksAsync();
 
         // Populate the version-control tab up front, so the feature is visibly absent on
         // TIA Portal below V21 rather than failing when someone clicks a button.
@@ -500,13 +529,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 row.PropertyChanged += OnRowChanged;
                 Blocks.Add(row);
             }
+            RebuildTree();
             SetStatus("Status.BlocksIn", blocks.Count, deviceId);
         }, deviceId);
     }
 
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(BlockRow.Selected)) Raise(nameof(SelectionSummary));
+        if (e.PropertyName != nameof(BlockRow.Selected)) return;
+
+        Raise(nameof(SelectionSummary));
+
+        // Folders show what their blocks add up to, so ticking one block can change the tick of
+        // every folder above it.
+        foreach (var node in BlockTree) node.Refresh();
     }
 
     private async Task ExportAsync() => await Guarded("Status.Exporting", async () =>
@@ -696,6 +732,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (BlockFilter.Length == 0) return true;
         return item is BlockRow row
                && row.Path.IndexOf(BlockFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// Rebuilds the tree from whatever the filter is showing, so a filtered tree contains the
+    /// matching blocks and the folders that lead to them, and nothing else.
+    /// </summary>
+    private void RebuildTree()
+    {
+        BlockTree.Clear();
+        foreach (var node in BlockNode.Build(BlocksView.Cast<BlockRow>())) BlockTree.Add(node);
+        Raise(nameof(HasBlocks));
     }
 
     private static IEnumerable<CompileMessage> Flatten(IEnumerable<CompileMessage> messages)

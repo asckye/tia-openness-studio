@@ -64,19 +64,31 @@ namespace TiaOpenness.Openness
 
         public static DeviceInfo Describe(Device device)
         {
-            var software = FindSoftware(device);
-            var carrier = FindSoftwareCarrier(device) ?? device.DeviceItems.SafeEnumerate().FirstOrDefault();
+            // One walk, not three. Every step into DeviceItems and every GetService is a COM
+            // round trip, and a rack with a few dozen items made describing one device cost
+            // hundreds of them - separately for the software, for the item carrying it, and again
+            // for the item names.
+            var items = AllDeviceItems(device).ToList();
+            var carrier = items.FirstOrDefault(i => SoftwareOf(i) != null);
+            var software = carrier == null ? null : SoftwareOf(carrier);
 
             return new DeviceInfo
             {
                 Id = device.Name,
                 Name = device.Name,
                 TypeIdentifier = device.TypeIdentifier,
-                ArticleNumber = carrier?.Attr<string>("OrderNumber") ?? device.Attr<string>("OrderNumber"),
-                FirmwareVersion = carrier?.Attr<string>("FirmwareVersion"),
+                ArticleNumber = (carrier ?? items.FirstOrDefault())?.Attr<string>("OrderNumber")
+                                ?? device.Attr<string>("OrderNumber"),
+                FirmwareVersion = (carrier ?? items.FirstOrDefault())?.Attr<string>("FirmwareVersion"),
                 Category = Categorize(software),
-                ItemNames = device.DeviceItems.SafeEnumerate().Select(i => i.Name).ToList(),
+                ItemNames = items.Select(i => i.Name).ToList(),
             };
+        }
+
+        private static Software SoftwareOf(DeviceItem item)
+        {
+            try { return item.GetService<SoftwareContainer>()?.Software; }
+            catch (Exception) { return null; }
         }
 
         /// <summary>
@@ -104,17 +116,8 @@ namespace TiaOpenness.Openness
         {
             foreach (var item in AllDeviceItems(device))
             {
-                var container = item.GetService<SoftwareContainer>();
-                if (container?.Software != null) return container.Software;
-            }
-            return null;
-        }
-
-        private static DeviceItem FindSoftwareCarrier(Device device)
-        {
-            foreach (var item in AllDeviceItems(device))
-            {
-                if (item.GetService<SoftwareContainer>()?.Software != null) return item;
+                var software = SoftwareOf(item);
+                if (software != null) return software;
             }
             return null;
         }

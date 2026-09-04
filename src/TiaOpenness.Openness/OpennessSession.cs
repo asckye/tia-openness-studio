@@ -81,12 +81,22 @@ namespace TiaOpenness.Openness
                 _portal = TryAttach();
                 if (_portal != null)
                 {
+                    Console.Error.WriteLine("[bridge] attached to a running TIA Portal");
+                    Console.Error.Flush();
+
                     // An attached instance keeps whatever project it already had open.
                     _project = _portal.Projects.SafeEnumerate().FirstOrDefault();
                     if (_project != null) IndexProject();
                     return GetState();
                 }
             }
+
+            // Starting TIA Portal is TIA's own cost - a minute is normal - and there is nothing to
+            // report while it happens, so say up front what is being waited on. Leaving an already
+            // running TIA Portal open is much faster, because the branch above attaches to it.
+            Console.Error.WriteLine("[bridge] no running TIA Portal to attach to; starting one, " +
+                                    "which usually takes about a minute");
+            Console.Error.Flush();
 
             _portal = new TiaPortal(withUserInterface
                 ? TiaPortalMode.WithUserInterface
@@ -602,20 +612,18 @@ namespace TiaOpenness.Openness
 
         // ---- plumbing ------------------------------------------------------
 
+        /// <summary>
+        /// Drops the cached indexes. It does not build any.
+        ///
+        /// Indexing walks every block, data type and tag table of a PLC, and each step is a COM
+        /// round trip. Doing that for every PLC the moment a project opened made opening a large
+        /// project take as long as reading all of it - before the engineer had even chosen a
+        /// device, and for devices they never looked at. Each PLC is now indexed the first time
+        /// something actually asks for it.
+        /// </summary>
         private void IndexProject()
         {
             _plcs.Clear();
-            if (_project == null) return;
-
-            foreach (var device in PlcNavigator.AllDevices(_project))
-            {
-                var software = PlcNavigator.FindPlcSoftware(device);
-                if (software == null) continue;
-
-                var context = new PlcContext { DeviceId = device.Name, Software = software };
-                Index(context);
-                _plcs[device.Name] = context;
-            }
         }
 
         private static void Index(PlcContext context)
@@ -698,6 +706,9 @@ namespace TiaOpenness.Openness
             if (_project == null) throw new InvalidOperationException("No project is open. Call project.open first.");
         }
 
+        /// <summary>
+        /// The indexed software of one PLC, built on first use and kept until the project changes.
+        /// </summary>
         private PlcContext RequirePlc(string deviceId)
         {
             RequireProject();
@@ -705,8 +716,27 @@ namespace TiaOpenness.Openness
             PlcContext plc;
             if (_plcs.TryGetValue(deviceId, out plc)) return plc;
 
-            throw new KeyNotFoundException("No PLC device named '" + deviceId + "'. Devices with PLC software: " +
-                (_plcs.Count == 0 ? "(none)" : string.Join(", ", _plcs.Keys)));
+            var devices = PlcNavigator.AllDevices(_project).ToList();
+            var device = devices.FirstOrDefault(d =>
+                string.Equals(d.Name, deviceId, StringComparison.OrdinalIgnoreCase));
+
+            if (device == null)
+            {
+                throw new KeyNotFoundException("No device named '" + deviceId + "'. Devices in this project: " +
+                    (devices.Count == 0 ? "(none)" : string.Join(", ", devices.Select(d => d.Name))));
+            }
+
+            var software = PlcNavigator.FindPlcSoftware(device);
+            if (software == null)
+            {
+                throw new KeyNotFoundException("Device '" + deviceId + "' carries no PLC software. " +
+                    "HMI and drive devices are listed but have no program blocks.");
+            }
+
+            plc = new PlcContext { DeviceId = device.Name, Software = software };
+            Index(plc);
+            _plcs[device.Name] = plc;
+            return plc;
         }
 
         public void Dispose()

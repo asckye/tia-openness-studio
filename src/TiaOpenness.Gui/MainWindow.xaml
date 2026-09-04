@@ -267,78 +267,64 @@
                            TextWrapping="Wrap" LineHeight="24" />
               </StackPanel>
 
-              <DataGrid ItemsSource="{Binding BlocksView}" IsReadOnly="False"
+              <!-- The tree TIA itself shows: its categories, then the folders the engineer made.
+                   A flat list of slash-separated paths is how the bridge addresses a block, not how
+                   anyone thinks about their program. -->
+              <!-- The tree TIA itself shows: its categories, then the folders the engineer made.
+                   A flat list of slash-separated paths is how the bridge addresses a block, not how
+                   anyone thinks about their program.
+
+                   The metadata trails the name instead of sitting in aligned columns: every row in a
+                   tree starts at a different indent, so columns would only look aligned by accident. -->
+              <TreeView ItemsSource="{Binding BlockTree}" BorderThickness="0" Background="Transparent"
                         Visibility="{Binding HasBlocks, Converter={StaticResource BoolToVisibility}}">
-                <DataGrid.Columns>
-                  <DataGridCheckBoxColumn Binding="{Binding Selected, UpdateSourceTrigger=PropertyChanged}"
-                                          Width="46">
-                    <DataGridCheckBoxColumn.ElementStyle>
-                      <Style TargetType="CheckBox" BasedOn="{StaticResource Ui.CheckBox}">
-                        <Setter Property="HorizontalAlignment" Value="Center" />
-                      </Style>
-                    </DataGridCheckBoxColumn.ElementStyle>
-                    <DataGridCheckBoxColumn.EditingElementStyle>
-                      <Style TargetType="CheckBox" BasedOn="{StaticResource Ui.CheckBox}">
-                        <Setter Property="HorizontalAlignment" Value="Center" />
-                      </Style>
-                    </DataGridCheckBoxColumn.EditingElementStyle>
-                  </DataGridCheckBoxColumn>
+                <TreeView.ItemContainerStyle>
+                  <Style TargetType="TreeViewItem">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Ui.Label}" />
+                  </Style>
+                </TreeView.ItemContainerStyle>
 
-                  <DataGridTextColumn Binding="{Binding Path}" Width="*" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Path}" />
-                    </DataGridTextColumn.Header>
-                    <DataGridTextColumn.ElementStyle>
-                      <Style TargetType="TextBlock">
-                        <Setter Property="FontWeight" Value="Bold" />
-                      </Style>
-                    </DataGridTextColumn.ElementStyle>
-                  </DataGridTextColumn>
+                <TreeView.ItemTemplate>
+                  <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal" Height="26">
+                      <CheckBox Style="{StaticResource Ui.CheckBox}"
+                                IsThreeState="{Binding IsFolder}"
+                                IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                VerticalAlignment="Center" Margin="0,0,10,0" />
 
-                  <DataGridTextColumn Binding="{Binding Kind}" Width="110" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Kind}" />
-                    </DataGridTextColumn.Header>
-                  </DataGridTextColumn>
+                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                              <!-- Folders read as structure, blocks as content. -->
+                              <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
 
-                  <DataGridTextColumn Binding="{Binding Number}" Width="76" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Number}" />
-                    </DataGridTextColumn.Header>
-                  </DataGridTextColumn>
+                      <TextBlock Text="{Binding Detail}" Style="{StaticResource Ui.Text.Mono}"
+                                 Foreground="{DynamicResource Ui.TertiaryLabel}"
+                                 VerticalAlignment="Center" Margin="12,0,0,0" />
 
-                  <DataGridTextColumn Binding="{Binding Language}" Width="84" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Language}" />
-                    </DataGridTextColumn.Header>
-                  </DataGridTextColumn>
+                      <TextBlock Text="{Binding Language}" Style="{StaticResource Ui.Text.Mono}"
+                                 Foreground="{DynamicResource Ui.TertiaryLabel}"
+                                 VerticalAlignment="Center" Margin="12,0,0,0" />
 
-                  <DataGridTextColumn Binding="{Binding Author}" Width="124" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Author}" />
-                    </DataGridTextColumn.Header>
-                  </DataGridTextColumn>
+                      <TextBlock Text="{Binding Author}"
+                                 Foreground="{DynamicResource Ui.TertiaryLabel}"
+                                 VerticalAlignment="Center" Margin="12,0,0,0" />
 
-                  <DataGridTextColumn Binding="{Binding Status}" Width="170" IsReadOnly="True">
-                    <DataGridTextColumn.Header>
-                      <TextBlock Text="{l:Tr Col.Status}" />
-                    </DataGridTextColumn.Header>
-                    <DataGridTextColumn.ElementStyle>
-                      <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="{DynamicResource Ui.Orange}" />
-                        <Style.Triggers>
-                          <!-- On the amber selection fill an amber warning is unreadable, so a
-                               selected row hands the cell back the selection's own colour. -->
-                          <DataTrigger Value="True"
-                                       Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}">
-                            <Setter Property="Foreground" Value="{DynamicResource Ui.SelectionText}" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </DataGridTextColumn.ElementStyle>
-                  </DataGridTextColumn>
-                </DataGrid.Columns>
-              </DataGrid>
+                      <TextBlock Text="{Binding Status}"
+                                 Foreground="{DynamicResource Ui.Orange}"
+                                 VerticalAlignment="Center" Margin="14,0,0,0" />
+                    </StackPanel>
+                  </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+              </TreeView>
             </Grid>
           </DockPanel>
         </Border>

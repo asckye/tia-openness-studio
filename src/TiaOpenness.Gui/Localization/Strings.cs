@@ -93,14 +93,13 @@ internal static class Strings
         ("Blocks.SourceFormat.Tip",    "Text export instead of SimaticML .xml. Only works for textual languages.",
                                        "导出为文本而非 SimaticML .xml,仅适用于文本类编程语言。"),
         ("Blocks.Export",              "Export", "导出"),
-        ("Col.Path",                   "Path", "路径"),
-        ("Col.Kind",                   "Kind", "类型"),
-        ("Col.Number",                 "No.", "编号"),
-        ("Col.Language",               "Lang", "语言"),
-        ("Col.Author",                 "Author", "作者"),
-        ("Col.Status",                 "Status", "状态"),
         ("Block.Protected",            "know-how protected", "专有技术保护"),
         ("Block.NeedsCompiling",       "needs compiling", "需要先编译"),
+
+        // The categories TIA splits a PLC's software into, named as TIA names them.
+        ("Tree.ProgramBlocks",         "Program blocks", "程序块"),
+        ("Tree.DataTypes",             "PLC data types", "PLC 数据类型"),
+        ("Tree.Tags",                  "PLC tags", "PLC 变量"),
 
         // ---- version control -------------------------------------------------------
         ("Vc.Workspace",               "Workspace", "工作区"),
