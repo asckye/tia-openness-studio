@@ -101,9 +101,10 @@ namespace TiaOpenness.Openness
                 DisplayName = display?.Name ?? device.Name,
                 TypeName = display?.Attr<string>("TypeName") ?? device.Attr<string>("TypeName"),
                 TypeIdentifier = device.TypeIdentifier,
-                ArticleNumber = (carrier ?? items.FirstOrDefault())?.Attr<string>("OrderNumber")
-                                ?? device.Attr<string>("OrderNumber"),
-                FirmwareVersion = (carrier ?? items.FirstOrDefault())?.Attr<string>("FirmwareVersion"),
+                // The item whose name is shown is the one whose article number and firmware
+                // belong with it. Falling back to items[0] would report the rack's blanks.
+                ArticleNumber = display?.Attr<string>("OrderNumber") ?? device.Attr<string>("OrderNumber"),
+                FirmwareVersion = display?.Attr<string>("FirmwareVersion"),
                 Category = Categorize(software),
                 GroupPath = entry.GroupPath ?? string.Empty,
                 ItemNames = items.Select(i => i.Name).ToList(),
@@ -115,19 +116,33 @@ namespace TiaOpenness.Openness
         /// drive. TIA prints "SW_701 [SCALANCE X208]" where the station itself is only called
         /// "SCALANCE X-200", so the name worth showing belongs to the head module, not the station.
         ///
-        /// <see cref="AllDeviceItems(Device)"/> yields each top-level item before descending, so
-        /// the first entry is the head module. A station whose only item repeats the station's own
-        /// name tells us nothing, and falls back to the station.
+        /// The first item is NOT that module. <see cref="AllDeviceItems(Device)"/> walks depth
+        /// first, and a rack-based station lists its rack first, so taking the first item named a
+        /// device "机架_0" — the rack — for every switch and IO station in the project.
+        ///
+        /// What separates a module from a rack is an article number: every orderable module has
+        /// one and a rack has none. That is tested rather than the name, because a name test would
+        /// have to know "Rack", "机架", "Baugruppenträger" and every other language TIA ships in.
         /// </summary>
         private static DeviceItem HeadModule(IReadOnlyList<DeviceItem> items, Device device)
         {
-            foreach (var item in items)
-            {
-                if (string.IsNullOrWhiteSpace(item.Name)) continue;
-                if (string.Equals(item.Name, device.Name, StringComparison.OrdinalIgnoreCase)) continue;
-                return item;
-            }
-            return null;
+            var named = items.Where(i => IsWorthShowing(i, device)).ToList();
+
+            // Only software-less devices reach here, and they carry few items, so walking them
+            // for an attribute costs little - unlike doing it for a CPU rack of a hundred.
+            return named.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Attr<string>("OrderNumber")))
+                   ?? named.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Attr<string>("TypeName")))
+                   ?? named.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// A nameless item, or one that only repeats the station's own name, tells the reader
+        /// nothing they cannot already see.
+        /// </summary>
+        private static bool IsWorthShowing(DeviceItem item, Device device)
+        {
+            return !string.IsNullOrWhiteSpace(item.Name)
+                   && !string.Equals(item.Name, device.Name, StringComparison.OrdinalIgnoreCase);
         }
 
         private static Software SoftwareOf(DeviceItem item)

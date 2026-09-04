@@ -376,6 +376,23 @@ namespace TiaOpenness.Openness
                        + "(" + reported + ")";
             }
 
+            // ProDiag and ProDiag_OB blocks are generated from the device's own diagnostic
+            // configuration; TIA has no text or SimaticML form for them at all. Left as TIA's own
+            // wording this reads like a fault to chase, when the only answer is that these blocks
+            // are not exportable and the rest of the export is unaffected.
+            if (reported.IndexOf("ProDiag", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "ProDiag: TIA cannot export this block in any format. It is generated from the "
+                       + "device's diagnostic settings, so there is nothing to version. Deselect it. "
+                       + "(" + reported + ")";
+            }
+
+            if (reported.IndexOf("not supported during import and export", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "TIA does not support exporting this block's programming language. "
+                       + "(" + reported + ")";
+            }
+
             if (reported.IndexOf("white-space", StringComparison.OrdinalIgnoreCase) >= 0
                 || reported.IndexOf("path", StringComparison.OrdinalIgnoreCase) >= 0)
             {

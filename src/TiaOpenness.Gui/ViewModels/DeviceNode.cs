@@ -79,7 +79,6 @@ public sealed class DeviceNode : ObservableObject
             string.IsNullOrWhiteSpace(projectName) ? "—" : projectName, null, isRoot: true);
 
         foreach (var device in list) Place(root, device);
-        Sort(root);
         return [root];
     }
 
@@ -104,19 +103,11 @@ public sealed class DeviceNode : ObservableObject
         parent.Children.Add(new DeviceNode(device.Name, device));
     }
 
-    /// <summary>Groups before devices, each alphabetical — the order TIA uses.</summary>
-    private static void Sort(DeviceNode node)
-    {
-        var ordered = node.Children
-            .OrderBy(c => c.IsFolder ? 0 : 1)
-            .ThenBy(c => c.Name, System.StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        node.Children.Clear();
-        foreach (var child in ordered)
-        {
-            node.Children.Add(child);
-            Sort(child);
-        }
-    }
+    // There is deliberately no sort here. The tree used to put folders first and order each
+    // level alphabetically, which was wrong twice over: it inverted the project's own order, and
+    // it sorted on Name - the station - while showing Label - the module - so a list that really
+    // was ordered looked scrambled (HMI_RT_1, HMI_RT_3, HMI_RT_4, HMI_RT_2).
+    //
+    // Openness returns devices in the order the project holds them, which is the order TIA's own
+    // tree shows. Mirroring that is the whole point of this view, so the order is left alone.
 }
