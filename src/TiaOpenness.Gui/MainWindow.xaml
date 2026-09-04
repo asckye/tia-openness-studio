@@ -67,10 +67,6 @@
 
           <Button Content="{l:Tr Toolbar.Doctor}" ToolTip="{l:Tr Toolbar.Doctor.Tip}"
                   Command="{Binding RunDoctor}" />
-          <!-- The one-time step Siemens' licensing forces on every install: the adapter has to be
-               compiled here, against the TIA Portal on this machine. -->
-          <Button Content="{l:Tr Toolbar.Enable}" ToolTip="{l:Tr Toolbar.Enable.Tip}"
-                  Command="{Binding BuildAdapter}" />
           <Button Content="{l:Tr Toolbar.Connect}" ToolTip="{l:Tr Toolbar.Connect.Tip}"
                   Style="{StaticResource Ui.Button.Primary}" Command="{Binding Connect}"
                   Margin="0" />
@@ -148,22 +144,45 @@
                          TextWrapping="Wrap" TextAlignment="Center" />
             </Border>
 
-            <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
-                     Visibility="{Binding HasDevices, Converter={StaticResource BoolToVisibility}}">
-              <ListBox.ItemTemplate>
-                <DataTemplate>
-                  <StackPanel>
-                    <TextBlock Text="{Binding Id}" FontWeight="Bold" />
-                    <TextBlock Style="{StaticResource Ui.Text.Mono}" Margin="0,3,0,0"
-                               TextTrimming="CharacterEllipsis">
+            <!-- The project tree as TIA shows it: the project at the root, the device groups the
+                 engineer filed devices into, then the devices. -->
+            <TreeView ItemsSource="{Binding DeviceTree}" BorderThickness="0" Background="Transparent"
+                      SelectedItemChanged="OnDeviceSelected"
+                      Visibility="{Binding HasDevices, Converter={StaticResource BoolToVisibility}}">
+              <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                  <Setter Property="Foreground" Value="{DynamicResource Ui.Label}" />
+                </Style>
+              </TreeView.ItemContainerStyle>
+
+              <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                  <StackPanel Margin="0,3">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                          <Setter Property="FontWeight" Value="Bold" />
+                          <Style.Triggers>
+                            <!-- The project and its groups are structure; the devices are the
+                                 things you click. -->
+                            <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                              <Setter Property="Foreground" Value="{DynamicResource Ui.SecondaryLabel}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Ui.Text.Mono}" Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource Ui.TertiaryLabel}">
                       <Run Text="{Binding Category, Mode=OneWay}" />
-                      <Run Text="·" />
-                      <Run Text="{Binding ArticleNumber, Mode=OneWay}" />
+                      <Run Text="{Binding Detail, Mode=OneWay}" />
                     </TextBlock>
                   </StackPanel>
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
+                </HierarchicalDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
           </Grid>
         </DockPanel>
       </Border>
@@ -176,8 +195,6 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="*" MinHeight="220" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" MinHeight="52" />
         </Grid.RowDefinitions>
 
         <!-- view switch on the left, actions on the whole project on the right -->
@@ -188,6 +205,8 @@
                            Content="{l:Tr Tab.Blocks}" IsChecked="{Binding IsBlocksTab, Mode=TwoWay}" />
               <RadioButton Style="{StaticResource Ui.Tab}" GroupName="View"
                            Content="{l:Tr Tab.VersionControl}" IsChecked="{Binding IsVcTab, Mode=TwoWay}" />
+              <RadioButton Style="{StaticResource Ui.Tab}" GroupName="View"
+                           Content="{l:Tr Tab.Log}" IsChecked="{Binding IsLogTab, Mode=TwoWay}" />
             </StackPanel>
           </Border>
 
@@ -446,32 +465,29 @@
           </DockPanel>
         </Border>
 
-        <GridSplitter Grid.Row="2" Height="14" HorizontalAlignment="Stretch"
-                      ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"
-                      Visibility="{Binding LogExpanded, Converter={StaticResource BoolToVisibility}}" />
-
-        <!-- ===== log ===== -->
-        <Border Grid.Row="3" Style="{StaticResource Ui.Card}" Padding="16,12">
+        <!-- ===== log =====
+             Its own view rather than a strip under the block tree: it is read when something
+             went wrong, and the rest of the time it should not be taking room from the tree. -->
+        <Border Grid.Row="1" Style="{StaticResource Ui.Card}"
+                Visibility="{Binding IsLogTab, Converter={StaticResource BoolToVisibility}}">
           <DockPanel>
-            <Grid DockPanel.Dock="Top">
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Rectangle Style="{StaticResource Ui.SectionMark}" />
-                <TextBlock Text="{l:Tr Log.Title}" Style="{StaticResource Ui.Text.Section}" />
-                <TextBlock Text="{Binding LogLineCount}" Style="{StaticResource Ui.Text.Mono}"
-                           Margin="10,0,0,0" />
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="{l:Tr Log.Copy}" Style="{StaticResource Ui.Button.LinkQuiet}"
-                        Click="OnCopyLog" />
-                <Button Content="{l:Tr Log.Clear}" Style="{StaticResource Ui.Button.LinkQuiet}"
-                        Click="OnClearLog" />
-                <Button Content="{Binding LogToggleLabel}" Style="{StaticResource Ui.Button.LinkQuiet}"
-                        Click="OnToggleLog" Margin="0" />
-              </StackPanel>
-            </Grid>
+            <Border DockPanel.Dock="Top" Style="{StaticResource Ui.CardBand}">
+              <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <TextBlock Text="{l:Tr Log.Title}" Style="{StaticResource Ui.Text.Section}" />
+                  <TextBlock Text="{Binding LogLineCount}" Style="{StaticResource Ui.Text.Mono}"
+                             Margin="10,0,0,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                  <Button Content="{l:Tr Log.Copy}" Style="{StaticResource Ui.Button.LinkQuiet}"
+                          Click="OnCopyLog" />
+                  <Button Content="{l:Tr Log.Clear}" Style="{StaticResource Ui.Button.LinkQuiet}"
+                          Click="OnClearLog" Margin="0" />
+                </StackPanel>
+              </Grid>
+            </Border>
 
-            <Grid Margin="0,12,0,0"
-                  Visibility="{Binding LogExpanded, Converter={StaticResource BoolToVisibility}}">
+            <Grid Margin="16,12,16,16">
               <TextBlock Text="{l:Tr Log.Empty}" Style="{StaticResource Ui.Text.Caption}"
                          VerticalAlignment="Top"
                          Visibility="{Binding HasLog, Converter={StaticResource NotBoolToVisibility}}" />
@@ -485,6 +501,7 @@
         </Border>
       </Grid>
     </Grid>
+
 
     <!-- ============================ status bar ============================ -->
     <Border Grid.Row="3" Background="{DynamicResource Ui.HeaderBackground}"

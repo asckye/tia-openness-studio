@@ -45,6 +45,14 @@ public sealed class BlockRow(BlockInfo info) : ObservableObject
     public void RefreshLocalizedText() => Raise(nameof(Status));
 }
 
+/// <summary>Which of the main views the window is showing.</summary>
+public enum MainView
+{
+    Blocks,
+    VersionControl,
+    Log,
+}
+
 /// <summary>Drives the single main window.</summary>
 public sealed class MainViewModel : ObservableObject, IDisposable
 {
@@ -65,8 +73,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _sourceFormat;
     private bool _busy;
     private bool _isConnected;
-    private bool _isVcTab;
-    private bool _logExpanded = true;
+    private MainView _view = MainView.Blocks;
     private bool _suppressDeviceLoad;
     private int _progressValue;
     private int _progressMax;
@@ -101,7 +108,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         RunDoctor = new AsyncCommand(DoctorAsync);
         Connect = new AsyncCommand(ConnectAsync);
-        BuildAdapter = new AsyncCommand(BuildAdapterAsync);
         OpenProject = new AsyncCommand(OpenProjectAsync, () => ProjectPath.Length > 0);
         Refresh = new AsyncCommand(RefreshBlocksAsync, () => SelectedDevice is not null);
         Export = new AsyncCommand(ExportAsync, () => SelectedDevice is not null && OutputDirectory.Length > 0);
@@ -136,7 +142,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var name in new[]
                  {
                      nameof(Status), nameof(SelectionSummary), nameof(WorkspaceRootDisplay),
-                     nameof(OpennessBadge), nameof(ModeLabel), nameof(LogToggleLabel),
+                     nameof(OpennessBadge), nameof(ModeLabel),
                  })
         {
             Raise(name);
@@ -163,12 +169,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>The blocks as TIA shows them: its categories, then the engineer's own folders.</summary>
     public ObservableCollection<BlockNode> BlockTree { get; } = [];
 
+    /// <summary>The devices as TIA shows them: the project, its device groups, then the devices.</summary>
+    public ObservableCollection<DeviceNode> DeviceTree { get; } = [];
+
     public ObservableCollection<WorkspaceInfo> Workspaces { get; } = [];
     public ObservableCollection<MappedObjectInfo> VcStatusItems { get; } = [];
 
     public AsyncCommand RunDoctor { get; }
     public AsyncCommand Connect { get; }
-    public AsyncCommand BuildAdapter { get; }
     public AsyncCommand OpenProject { get; }
     public AsyncCommand Refresh { get; }
     public AsyncCommand Export { get; }
@@ -264,42 +272,37 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public int LogLineCount => Log.Length == 0 ? 0 : Log.Count(c => c == '\n');
 
-    /// <summary>Collapsing the log gives the table the whole pane on a small screen.</summary>
-    public bool LogExpanded
+    // The views are one choice, so they are one field with a bindable face each; independent
+    // bools would let all of them be false and show nothing at all.
+    private MainView View
     {
-        get => _logExpanded;
-        private set { if (Set(ref _logExpanded, value)) Raise(nameof(LogToggleLabel)); }
-    }
-
-    public string LogToggleLabel
-    {
-        // Written out rather than as a ternary so both keys sit literally at a call site, which
-        // is what SourceConsistencyTests scans for when it checks the catalogue has no dead entries.
-        get
-        {
-            if (LogExpanded) return Loc.Current["Log.Collapse"];
-            return Loc.Current["Log.Expand"];
-        }
-    }
-
-    public void ToggleLog() => LogExpanded = !LogExpanded;
-
-    // The two views are one choice, so they are one field with two bindable faces; a pair of
-    // independent bools would let both be false and show neither view.
-    public bool IsVcTab
-    {
-        get => _isVcTab;
+        get => _view;
         set
         {
-            if (!Set(ref _isVcTab, value)) return;
+            if (_view == value) return;
+            _view = value;
             Raise(nameof(IsBlocksTab));
+            Raise(nameof(IsVcTab));
+            Raise(nameof(IsLogTab));
         }
     }
 
     public bool IsBlocksTab
     {
-        get => !_isVcTab;
-        set { if (value) IsVcTab = false; }
+        get => _view == MainView.Blocks;
+        set { if (value) View = MainView.Blocks; }
+    }
+
+    public bool IsVcTab
+    {
+        get => _view == MainView.VersionControl;
+        set { if (value) View = MainView.VersionControl; }
+    }
+
+    public bool IsLogTab
+    {
+        get => _view == MainView.Log;
+        set { if (value) View = MainView.Log; }
     }
 
     public string BlockFilter
@@ -415,24 +418,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// cannot be done before shipping, because the Siemens assemblies are not redistributable.
     /// The bridge re-checks on the next connect, so this takes effect without a restart.
     /// </summary>
-    private async Task BuildAdapterAsync() => await Guarded("Status.BuildingAdapter", async () =>
-    {
-        EnsureBridge();
-        var result = await _client.BuildAdapterAsync();
-
-        if (result.Succeeded)
-        {
-            Append(Loc.Current.T("Log.AdapterBuilt", result.OpennessVersion,
-                result.ReferencedAssemblies, result.OutputPath));
-            SetStatus("Status.AdapterBuilt", result.OpennessVersion);
-            return;
-        }
-
-        foreach (var error in result.Errors) Append(error);
-        Append(Loc.Current["Log.AdapterHint"]);
-        SetStatus("Status.AdapterFailed", result.OpennessVersion, result.Errors.Count);
-    });
-
     /// <summary>
     /// Opens the session. Shared with <see cref="OpenProjectAsync"/>, which connects on the
     /// operator's behalf rather than making them discover the ordering.
@@ -490,6 +475,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var devices = await _client.ListDevicesAsync();
         Devices.Clear();
         foreach (var device in devices) Devices.Add(device);
+
+        DeviceTree.Clear();
+        foreach (var node in DeviceNode.Build(devices, ProjectName)) DeviceTree.Add(node);
 
         Append(Loc.Current.T("Log.DeviceCount", devices.Count));
 
@@ -926,7 +914,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var tab = Array.FindIndex(args, a => string.Equals(a, "--tab", StringComparison.OrdinalIgnoreCase));
         if (tab >= 0 && tab + 1 < args.Length)
         {
-            IsVcTab = args[tab + 1].ToLowerInvariant() is "vc" or "version-control";
+            View = args[tab + 1].ToLowerInvariant() switch
+            {
+                "vc" or "version-control" => MainView.VersionControl,
+                "log" => MainView.Log,
+                _ => MainView.Blocks,
+            };
         }
 
         var index = Array.FindIndex(args, a => string.Equals(a, "--project", StringComparison.OrdinalIgnoreCase));

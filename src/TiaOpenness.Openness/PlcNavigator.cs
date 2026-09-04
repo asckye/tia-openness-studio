@@ -44,26 +44,47 @@ namespace TiaOpenness.Openness
         /// <summary>Every device in the project, including those nested in device groups.</summary>
         public static IEnumerable<Device> AllDevices(Project project)
         {
-            foreach (var device in project.Devices.SafeEnumerate()) yield return device;
+            return AllDeviceEntries(project).Select(e => e.Device);
+        }
+
+        /// <summary>A device together with the device groups it sits in, as TIA files them.</summary>
+        public struct DeviceEntry
+        {
+            public Device Device;
+            /// <summary>Slash-separated group names; empty at the project root.</summary>
+            public string GroupPath;
+        }
+
+        public static IEnumerable<DeviceEntry> AllDeviceEntries(Project project)
+        {
+            foreach (var device in project.Devices.SafeEnumerate())
+            {
+                yield return new DeviceEntry { Device = device, GroupPath = string.Empty };
+            }
 
             foreach (var group in project.DeviceGroups.SafeEnumerate())
             {
-                foreach (var device in AllDevices(group)) yield return device;
+                foreach (var entry in AllDeviceEntries(group, group.Name)) yield return entry;
             }
         }
 
-        private static IEnumerable<Device> AllDevices(DeviceUserGroup group)
+        private static IEnumerable<DeviceEntry> AllDeviceEntries(DeviceUserGroup group, string path)
         {
-            foreach (var device in group.Devices.SafeEnumerate()) yield return device;
+            foreach (var device in group.Devices.SafeEnumerate())
+            {
+                yield return new DeviceEntry { Device = device, GroupPath = path };
+            }
 
             foreach (var child in group.Groups.SafeEnumerate())
             {
-                foreach (var device in AllDevices(child)) yield return device;
+                foreach (var entry in AllDeviceEntries(child, Join(path, child.Name))) yield return entry;
             }
         }
 
-        public static DeviceInfo Describe(Device device)
+        public static DeviceInfo Describe(DeviceEntry entry)
         {
+            var device = entry.Device;
+
             // One walk, not three. Every step into DeviceItems and every GetService is a COM
             // round trip, and a rack with a few dozen items made describing one device cost
             // hundreds of them - separately for the software, for the item carrying it, and again
@@ -81,6 +102,7 @@ namespace TiaOpenness.Openness
                                 ?? device.Attr<string>("OrderNumber"),
                 FirmwareVersion = (carrier ?? items.FirstOrDefault())?.Attr<string>("FirmwareVersion"),
                 Category = Categorize(software),
+                GroupPath = entry.GroupPath ?? string.Empty,
                 ItemNames = items.Select(i => i.Name).ToList(),
             };
         }

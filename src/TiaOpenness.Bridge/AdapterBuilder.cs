@@ -39,14 +39,46 @@ namespace TiaOpenness.Bridge
             {
                 var bridgeDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 if (string.IsNullOrEmpty(bridgeDirectory)) return false;
-                if (File.Exists(Path.Combine(bridgeDirectory, AdapterAssembly))) return false;
 
                 var payloadRoot = Path.GetDirectoryName(bridgeDirectory);
                 if (payloadRoot == null) return false;
 
-                return File.Exists(Path.Combine(payloadRoot, "compiler", "csc.exe"))
-                    && Directory.Exists(Path.Combine(payloadRoot, "adapter"))
-                    && OpennessLocator.FindAll().Count > 0;
+                if (!File.Exists(Path.Combine(payloadRoot, "compiler", "csc.exe"))) return false;
+                if (!Directory.Exists(Path.Combine(payloadRoot, "adapter"))) return false;
+
+                var installed = OpennessLocator.FindAll();
+                if (installed.Count == 0) return false;
+
+                return !File.Exists(Path.Combine(bridgeDirectory, AdapterAssembly))
+                    || IsStale(bridgeDirectory, installed);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// True when the adapter was built against a TIA version that is no longer installed -
+        /// which is what upgrading TIA Portal leaves behind. The assembly is still there, so
+        /// "missing" does not catch it; loading it just fails to bind. Rebuilding is the fix, and
+        /// it is the same fix whether the operator knows to ask for it or not.
+        /// </summary>
+        private static bool IsStale(string bridgeDirectory, IEnumerable<OpennessInstallation> installed)
+        {
+            var stamp = Path.Combine(bridgeDirectory, "OPENNESS_ADAPTER.txt");
+            if (!File.Exists(stamp)) return false;
+
+            try
+            {
+                var builtAgainst = File.ReadAllLines(stamp)
+                    .FirstOrDefault(line => line.StartsWith("version=", StringComparison.Ordinal))
+                    ?.Substring("version=".Length)
+                    .Trim();
+
+                if (string.IsNullOrEmpty(builtAgainst)) return false;
+
+                return !installed.Any(i => string.Equals(i.Version, builtAgainst, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception)
             {

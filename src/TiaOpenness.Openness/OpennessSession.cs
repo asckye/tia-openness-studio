@@ -213,24 +213,29 @@ namespace TiaOpenness.Openness
         public IReadOnlyList<DeviceInfo> ListDevices()
         {
             RequireProject();
-            return PlcNavigator.AllDevices(_project).Select(PlcNavigator.Describe).ToList();
+            return PlcNavigator.AllDeviceEntries(_project).Select(PlcNavigator.Describe).ToList();
         }
 
         public IReadOnlyList<BlockInfo> ListBlocks(string deviceId, bool includeSystemBlocks)
         {
-            var plc = RequirePlc(deviceId);
+            PlcContext plc;
+            if (!TryGetPlc(deviceId, out plc)) return new List<BlockInfo>();
+
             var blocks = new List<BlockInfo>();
 
             foreach (var pair in plc.Blocks)
             {
                 var info = PlcNavigator.Describe(pair.Value, pair.Key);
+                info.FolderPath = FolderIn(plc, pair.Key);
                 if (!includeSystemBlocks && IsSystemBlock(info)) continue;
                 blocks.Add(info);
             }
 
             foreach (var pair in plc.Types)
             {
-                blocks.Add(PlcNavigator.Describe(pair.Value, pair.Key));
+                var type = PlcNavigator.Describe(pair.Value, pair.Key);
+                type.FolderPath = FolderIn(plc, pair.Key);
+                blocks.Add(type);
             }
 
             return blocks.OrderBy(b => b.Path, StringComparer.OrdinalIgnoreCase).ToList();
@@ -266,10 +271,9 @@ namespace TiaOpenness.Openness
                 var item = new ExportedItem { BlockPath = target.Path };
                 try
                 {
-                    var folder = preserveFolders ? FolderOf(target.Path) : string.Empty;
-                    var directory = string.IsNullOrEmpty(folder)
-                        ? outputDirectory
-                        : Path.Combine(outputDirectory, folder.Replace('/', Path.DirectorySeparatorChar));
+                    var directory = preserveFolders
+                        ? Path.Combine(outputDirectory, SafeFolder(target.Folder))
+                        : outputDirectory;
                     Directory.CreateDirectory(directory);
 
                     item.FilePath = format == ExportFormat.SimaticMl
@@ -330,19 +334,45 @@ namespace TiaOpenness.Openness
         }
 
         /// <summary>Turns the two failures engineers actually hit into instructions.</summary>
+        /// <summary>
+        /// Says why the export failed, taken from what TIA reported rather than from what the
+        /// block's flags suggested. Leading with "block is inconsistent" because the flag said so,
+        /// while TIA had actually rejected the file path, sent people off to compile a block that
+        /// compiled perfectly well.
+        /// </summary>
         private static string Explain(Exception ex, ExportTarget target)
         {
-            if (target.KnowHowProtected)
+            var reported = Flatten(ex.Message);
+
+            if (reported.IndexOf("not permitted", StringComparison.OrdinalIgnoreCase) >= 0
+                || target.KnowHowProtected && reported.IndexOf("know-how", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return "Block is know-how protected and cannot be exported. Remove the protection in TIA Portal first. " +
-                       "(" + ex.Message + ")";
+                return "Know-how protected: TIA does not permit exporting this block. Remove the protection first. "
+                       + "(" + reported + ")";
             }
-            if (!target.Consistent)
+
+            if (reported.IndexOf("Inconsistent", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return "Block is inconsistent; TIA can only export a block that compiles. Compile the device first. " +
-                       "(" + ex.Message + ")";
+                return "Inconsistent: TIA can only export a block that compiles. Compile the device first. "
+                       + "(" + reported + ")";
             }
-            return ex.Message;
+
+            if (reported.IndexOf("white-space", StringComparison.OrdinalIgnoreCase) >= 0
+                || reported.IndexOf("path", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "TIA rejected the file path built from this block's name. Please report it with the name. "
+                       + "(" + reported + ")";
+            }
+
+            return reported;
+        }
+
+        private static string Flatten(string message)
+        {
+            return string.Join(" ", (message ?? string.Empty)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.Length > 0));
         }
 
         // ---- import --------------------------------------------------------
@@ -451,7 +481,9 @@ namespace TiaOpenness.Openness
 
         public IReadOnlyList<TagTableInfo> ListTagTables(string deviceId)
         {
-            var plc = RequirePlc(deviceId);
+            PlcContext plc;
+            if (!TryGetPlc(deviceId, out plc)) return new List<TagTableInfo>();
+
             return plc.TagTables
                 .Select(pair => PlcNavigator.Describe(pair.Value, pair.Key))
                 .OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase)
@@ -460,7 +492,9 @@ namespace TiaOpenness.Openness
 
         public IReadOnlyList<TagInfo> ListTags(string deviceId, string tableName)
         {
-            var plc = RequirePlc(deviceId);
+            PlcContext plc;
+            if (!TryGetPlc(deviceId, out plc)) return new List<TagInfo>();
+
 
             IEnumerable<KeyValuePair<string, PlcTagTable>> tables = plc.TagTables;
             if (!string.IsNullOrWhiteSpace(tableName))
@@ -547,7 +581,12 @@ namespace TiaOpenness.Openness
 
         public InspectionReport Inspect(string deviceId, InspectionOptions options)
         {
-            var plc = RequirePlc(deviceId);
+            PlcContext plc;
+            if (!TryGetPlc(deviceId, out plc))
+            {
+                return new InspectionReport { TimestampUtc = DateTimeOffset.UtcNow, DeviceId = deviceId };
+            }
+
             var blocks = ListBlocks(deviceId, includeSystemBlocks: false);
 
             ISet<string> referenced = null;
@@ -635,8 +674,8 @@ namespace TiaOpenness.Openness
         {
             if (blockPaths == null || blockPaths.Count == 0)
             {
-                return plc.Blocks.Select(p => ExportTarget.For(p.Key, p.Value))
-                    .Concat(plc.Types.Select(p => ExportTarget.For(p.Key, p.Value)))
+                return plc.Blocks.Select(p => ExportTarget.For(p.Key, FolderIn(plc, p.Key), p.Value))
+                    .Concat(plc.Types.Select(p => ExportTarget.For(p.Key, FolderIn(plc, p.Key), p.Value)))
                     .OrderBy(t => t.Path, StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -649,14 +688,14 @@ namespace TiaOpenness.Openness
                 var blockMatch = plc.Blocks.FirstOrDefault(p => Matches(p.Key, p.Value.Name, requested));
                 if (blockMatch.Value != null)
                 {
-                    targets.Add(ExportTarget.For(blockMatch.Key, blockMatch.Value));
+                    targets.Add(ExportTarget.For(blockMatch.Key, FolderIn(plc, blockMatch.Key), blockMatch.Value));
                     continue;
                 }
 
                 var typeMatch = plc.Types.FirstOrDefault(p => Matches(p.Key, p.Value.Name, requested));
                 if (typeMatch.Value != null)
                 {
-                    targets.Add(ExportTarget.For(typeMatch.Key, typeMatch.Value));
+                    targets.Add(ExportTarget.For(typeMatch.Key, FolderIn(plc, typeMatch.Key), typeMatch.Value));
                     continue;
                 }
 
@@ -677,22 +716,53 @@ namespace TiaOpenness.Openness
                 || string.Equals(name, requested, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string FolderOf(string path)
-        {
-            var index = path.LastIndexOf('/');
-            return index < 0 ? string.Empty : path.Substring(0, index);
-        }
-
-        /// <summary>Block names may contain characters Windows rejects in a file name.</summary>
+        /// <summary>
+        /// A file name TIA will accept for this block.
+        ///
+        /// Block names in the field carry things a path cannot: slashes ("FB4 select / request from
+        /// panel"), double spaces ("SEW  TT"), trailing spaces. Openness refuses the resulting path
+        /// outright - "The argument 'path' contains additional white-space characters which is not
+        /// allowed" - so runs of whitespace collapse to one space, the ends are trimmed, and
+        /// anything a file name cannot hold becomes an underscore.
+        /// </summary>
         private static string SafeFileName(string name)
         {
             var invalid = Path.GetInvalidFileNameChars();
-            var buffer = name.ToCharArray();
-            for (var i = 0; i < buffer.Length; i++)
+            var text = new System.Text.StringBuilder(name.Length);
+            var lastWasSpace = false;
+
+            foreach (var character in name ?? string.Empty)
             {
-                if (Array.IndexOf(invalid, buffer[i]) >= 0) buffer[i] = '_';
+                if (char.IsWhiteSpace(character))
+                {
+                    if (!lastWasSpace) text.Append(' ');
+                    lastWasSpace = true;
+                    continue;
+                }
+
+                lastWasSpace = false;
+                text.Append(Array.IndexOf(invalid, character) >= 0 ? '_' : character);
             }
-            return new string(buffer);
+
+            var safe = text.ToString().Trim();
+            return safe.Length == 0 ? "_" : safe;
+        }
+
+        /// <summary>The same rules applied to each level of a group path.</summary>
+        private static string SafeFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder)) return string.Empty;
+
+            return string.Join(
+                Path.DirectorySeparatorChar.ToString(),
+                folder.Split('/').Select(SafeFileName).ToArray());
+        }
+
+        /// <summary>The group a block sits in, as recorded when the project was indexed.</summary>
+        private static string FolderIn(PlcContext plc, string path)
+        {
+            string folder;
+            return plc.Folders.TryGetValue(path, out folder) ? folder : string.Empty;
         }
 
         private void RequireConnected()
@@ -708,13 +778,31 @@ namespace TiaOpenness.Openness
 
         /// <summary>
         /// The indexed software of one PLC, built on first use and kept until the project changes.
+        /// Throws when the device carries no PLC software; use <see cref="TryGetPlc"/> where an
+        /// empty answer is the right one.
         /// </summary>
         private PlcContext RequirePlc(string deviceId)
         {
+            PlcContext plc;
+            if (TryGetPlc(deviceId, out plc)) return plc;
+
+            throw new KeyNotFoundException("Device '" + deviceId + "' carries no PLC software, " +
+                "so this operation does not apply to it.");
+        }
+
+        /// <summary>
+        /// The indexed software of one PLC, or false when this device has none.
+        ///
+        /// A project lists racks, HMIs and drives beside its PLCs, and the app shows all of them.
+        /// Asking one of those for its blocks is an ordinary question with an empty answer, not a
+        /// fault - reporting it as an error meant clicking a rack in the device list raised one.
+        /// An unknown device name is still an error, because that is a caller mistake.
+        /// </summary>
+        private bool TryGetPlc(string deviceId, out PlcContext plc)
+        {
             RequireProject();
 
-            PlcContext plc;
-            if (_plcs.TryGetValue(deviceId, out plc)) return plc;
+            if (_plcs.TryGetValue(deviceId, out plc)) return true;
 
             var devices = PlcNavigator.AllDevices(_project).ToList();
             var device = devices.FirstOrDefault(d =>
@@ -727,16 +815,12 @@ namespace TiaOpenness.Openness
             }
 
             var software = PlcNavigator.FindPlcSoftware(device);
-            if (software == null)
-            {
-                throw new KeyNotFoundException("Device '" + deviceId + "' carries no PLC software. " +
-                    "HMI and drive devices are listed but have no program blocks.");
-            }
+            if (software == null) return false;
 
             plc = new PlcContext { DeviceId = device.Name, Software = software };
             Index(plc);
             _plcs[device.Name] = plc;
-            return plc;
+            return true;
         }
 
         public void Dispose()
@@ -749,16 +833,19 @@ namespace TiaOpenness.Openness
         {
             public string Path;
             public string Name;
+            /// <summary>The real group prefix, never derived by splitting Path: a block name may contain a slash.</summary>
+            public string Folder;
             public PlcBlock Block;
             public PlcType Type;
             public bool KnowHowProtected;
             public bool Consistent;
 
-            public static ExportTarget For(string path, PlcBlock block)
+            public static ExportTarget For(string path, string folder, PlcBlock block)
             {
                 return new ExportTarget
                 {
                     Path = path,
+                    Folder = folder,
                     Name = block.Name,
                     Block = block,
                     KnowHowProtected = block.Prop("IsKnowHowProtected", false),
@@ -766,11 +853,12 @@ namespace TiaOpenness.Openness
                 };
             }
 
-            public static ExportTarget For(string path, PlcType type)
+            public static ExportTarget For(string path, string folder, PlcType type)
             {
                 return new ExportTarget
                 {
                     Path = path,
+                    Folder = folder,
                     Name = type.Name,
                     Type = type,
                     KnowHowProtected = type.Prop("IsKnowHowProtected", false),

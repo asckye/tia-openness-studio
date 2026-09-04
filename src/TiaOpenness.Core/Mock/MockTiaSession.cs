@@ -370,6 +370,7 @@ namespace TiaOpenness.Core.Mock
                     ArticleNumber = "6ES7 516-3FN02-0AB0",
                     FirmwareVersion = "V3.1",
                     Category = "Plc",
+                    GroupPath = string.Empty,
                     ItemNames = new List<string> { "PLC_1", "Rack_0" },
                 },
             };
@@ -411,6 +412,7 @@ namespace TiaOpenness.Core.Mock
                     ArticleNumber = "6AV2 128-3GB36-0AX0",
                     FirmwareVersion = "V21",
                     Category = "Hmi",
+                    GroupPath = "Line 1",
                     ItemNames = new List<string> { "HMI_1" },
                 },
             };
@@ -425,6 +427,7 @@ namespace TiaOpenness.Core.Mock
             return new BlockInfo
             {
                 Path = path,
+                FolderPath = path.LastIndexOf('/') < 0 ? string.Empty : path.Substring(0, path.LastIndexOf('/')),
                 Name = path.Substring(path.LastIndexOf('/') + 1),
                 Kind = kind,
                 Number = number,

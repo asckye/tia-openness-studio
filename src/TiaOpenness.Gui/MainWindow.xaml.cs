@@ -18,6 +18,12 @@ public partial class MainWindow : Window
 
     // ---- browse buttons ----------------------------------------------------
 
+    /// <summary>The tree carries folders as well as devices; only a device changes the selection.</summary>
+    private void OnDeviceSelected(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is ViewModels.DeviceNode { Device: not null } node) _model.SelectedDevice = node.Device;
+    }
+
     private void OnBrowseProject(object sender, RoutedEventArgs e) => _model.BrowseProject();
 
     private void OnBrowseOutput(object sender, RoutedEventArgs e) => _model.BrowseOutput();
@@ -51,5 +57,4 @@ public partial class MainWindow : Window
 
     private void OnClearLog(object sender, RoutedEventArgs e) => _model.ClearLog();
 
-    private void OnToggleLog(object sender, RoutedEventArgs e) => _model.ToggleLog();
 }

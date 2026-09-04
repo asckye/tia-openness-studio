@@ -97,6 +97,12 @@ namespace TiaOpenness.Contracts.Models
         public string FirmwareVersion { get; set; }
         /// <summary>"Plc", "Hmi", "Drive" or "Other".</summary>
         public string Category { get; set; }
+
+        /// <summary>
+        /// Slash-separated device groups this device sits in, empty at the project root. TIA lets
+        /// an engineer file devices into folders, and a flat list loses that.
+        /// </summary>
+        public string GroupPath { get; set; }
         public List<string> ItemNames { get; set; } = new List<string>();
     }
 
@@ -105,6 +111,12 @@ namespace TiaOpenness.Contracts.Models
     {
         /// <summary>Slash-separated path inside the block folder, e.g. "Motion/FB_Axis".</summary>
         public string Path { get; set; }
+
+        /// <summary>
+        /// The folder alone, without the name. Kept separate because a block name may itself
+        /// contain a slash - splitting Path would invent a folder that does not exist.
+        /// </summary>
+        public string FolderPath { get; set; }
         public string Name { get; set; }
         public BlockKind Kind { get; set; }
         public int? Number { get; set; }

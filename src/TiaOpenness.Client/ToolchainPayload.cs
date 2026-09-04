@@ -52,12 +52,16 @@ namespace TiaOpenness.Client
                 var target = VersionedFolder(assembly);
                 var stamp = Path.Combine(target, ".complete");
 
-                // Re-extracting on every start would fight a running bridge for its own exe, so
-                // the marker is written last and checked first.
-                if (!File.Exists(stamp))
+                // The marker holds the build this payload came from, not just the version. Keying
+                // it on the version alone meant a rebuilt executable kept running the previously
+                // unpacked bridge - the app and the bridge silently disagreeing about their own
+                // code. The module id changes with every build, so this cannot happen quietly.
+                var build = BuildIdentity(assembly);
+
+                if (ReadStamp(stamp) != build)
                 {
                     Extract(assembly, names, target);
-                    File.WriteAllText(stamp, DateTimeOffset.UtcNow.ToString("O"));
+                    File.WriteAllText(stamp, build);
                 }
 
                 _root = target;
@@ -77,6 +81,19 @@ namespace TiaOpenness.Client
                 "TiaOpenness", version);
         }
 
+        /// <summary>Identifies this exact build. The module id is regenerated on every compile.</summary>
+        private static string BuildIdentity(Assembly assembly)
+        {
+            try { return assembly.ManifestModule.ModuleVersionId.ToString("N"); }
+            catch (Exception) { return assembly.GetName().Version?.ToString() ?? "unknown"; }
+        }
+
+        private static string ReadStamp(string path)
+        {
+            try { return File.Exists(path) ? File.ReadAllText(path).Trim() : null; }
+            catch (Exception) { return null; }
+        }
+
         private static void Extract(Assembly assembly, IEnumerable<string> names, string target)
         {
             foreach (var name in names)
@@ -88,9 +105,18 @@ namespace TiaOpenness.Client
                 using (var source = assembly.GetManifestResourceStream(name))
                 {
                     if (source == null) continue;
-                    using (var destination = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+                    try
                     {
-                        source.CopyTo(destination);
+                        using (var destination = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            source.CopyTo(destination);
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        // A bridge from an earlier run may still hold its own executable. The file
+                        // that is already there came from a payload too, so keep it rather than
+                        // abandoning the whole extraction.
                     }
                 }
             }

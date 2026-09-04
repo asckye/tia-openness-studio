@@ -174,7 +174,7 @@ public class MainWindowTests(WpfContext wpf)
     /// means its binding did not resolve.
     /// </summary>
     [Theory]
-    [InlineData("View", 2)]
+    [InlineData("View", 3)]
     [InlineData("Appearance", 3)]
     [InlineData("Language", 2)]
     public void Every_picker_group_has_one_and_only_one_choice(string group, int expectedSegments)
@@ -257,23 +257,33 @@ public class MainWindowTests(WpfContext wpf)
         });
     }
 
+    /// <summary>
+    /// The three views are one choice held in one field. Bound as three independent bools they
+    /// could all be false at once, and the pane would show nothing.
+    /// </summary>
     [Fact]
-    public void The_log_can_be_collapsed_and_re_expanded()
+    public void Exactly_one_view_is_selected_at_a_time()
     {
         wpf.Run(() =>
         {
             using var rendered = Render();
             var model = (ViewModels.MainViewModel)rendered.Host.DataContext;
 
-            Assert.True(model.LogExpanded);
+            Assert.True(model.IsBlocksTab);
+            Assert.False(model.IsVcTab);
+            Assert.False(model.IsLogTab);
 
-            model.ToggleLog();
+            model.IsLogTab = true;
             Layout(rendered.Host);
-            Assert.False(model.LogExpanded);
+            Assert.True(model.IsLogTab);
+            Assert.False(model.IsBlocksTab);
+            Assert.False(model.IsVcTab);
 
-            model.ToggleLog();
+            model.IsVcTab = true;
             Layout(rendered.Host);
-            Assert.True(model.LogExpanded);
+            Assert.True(model.IsVcTab);
+            Assert.False(model.IsLogTab);
+            Assert.False(model.IsBlocksTab);
         });
     }
 

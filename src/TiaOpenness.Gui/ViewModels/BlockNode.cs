@@ -152,20 +152,25 @@ public sealed class BlockNode : ObservableObject
     /// <summary>Walks the block's folder path, creating folders as needed, and hangs it at the end.</summary>
     private static void Place(BlockNode category, BlockRow row)
     {
-        var segments = row.Path.Split('/');
         var parent = category;
 
-        // The last segment is the block itself, so it is not a folder.
-        for (var i = 0; i < segments.Length - 1; i++)
+        // The folder comes from the block's own folder path, never from splitting its full path:
+        // real block names contain slashes ("FB4 select / request from panel"), and splitting one
+        // of those invents a folder that does not exist.
+        var segments = row.Info.FolderPath is { Length: > 0 } folder
+            ? folder.Split('/')
+            : [];
+
+        for (var i = 0; i < segments.Length; i++)
         {
             var name = segments[i];
-            var folder = parent.Children.FirstOrDefault(c => c.IsFolder && c.Name == name);
-            if (folder is null)
+            var existing = parent.Children.FirstOrDefault(c => c.IsFolder && c.Name == name);
+            if (existing is null)
             {
-                folder = new BlockNode(name, null);
-                parent.Children.Add(folder);
+                existing = new BlockNode(name, null);
+                parent.Children.Add(existing);
             }
-            parent = folder;
+            parent = existing;
         }
 
         parent.Children.Add(new BlockNode(row.Name, row));
