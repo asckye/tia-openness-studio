@@ -97,6 +97,46 @@ namespace TiaOpenness.Contracts.Models
         public string Error { get; set; }
     }
 
+    /// <summary>What a line of a unified diff is.</summary>
+    public enum DiffLineKind
+    {
+        /// <summary>Unchanged, shown for context.</summary>
+        Context = 0,
+        Added = 1,
+        Removed = 2,
+        /// <summary>A hunk header, the @@ line.</summary>
+        Hunk = 3,
+        /// <summary>A file header: diff, index, ---, +++.</summary>
+        Header = 4,
+    }
+
+    /// <summary>One line of a unified diff.</summary>
+    public class DiffLine
+    {
+        public DiffLineKind Kind { get; set; }
+        public string Text { get; set; }
+    }
+
+    /// <summary>
+    /// The workspace's uncommitted changes, as Git sees them.
+    ///
+    /// The comparison has to run against the files rather than against the project: VCI reports
+    /// whether a mapped object matches its file, but gives no way to read the project side without
+    /// writing it out first. So the order is push, then review this, then commit.
+    /// </summary>
+    public class WorkspaceDiff
+    {
+        public string WorkspaceName { get; set; }
+        public string RootPath { get; set; }
+        /// <summary>False when the folder is not a Git repository, or Git is not installed.</summary>
+        public bool Available { get; set; }
+        /// <summary>Why it is unavailable, or what was run.</summary>
+        public string Detail { get; set; }
+        /// <summary>Files with uncommitted changes, whether or not a diff was requested for one.</summary>
+        public List<string> ChangedFiles { get; set; } = new List<string>();
+        public List<DiffLine> Lines { get; set; } = new List<DiffLine>();
+    }
+
     /// <summary>Aggregate result of a workspace synchronization.</summary>
     public class SyncResult
     {

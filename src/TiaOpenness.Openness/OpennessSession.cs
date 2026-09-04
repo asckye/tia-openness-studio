@@ -37,6 +37,10 @@ namespace TiaOpenness.Openness
         private readonly Dictionary<string, PlcContext> _plcs =
             new Dictionary<string, PlcContext>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Device name -> indexed HMI screens and tag tables. Cleared with the PLC indexes.</summary>
+        private readonly Dictionary<string, HmiContext> _hmis =
+            new Dictionary<string, HmiContext>(StringComparer.OrdinalIgnoreCase);
+
         public OpennessSession(string boundVersion)
         {
             _boundVersion = boundVersion;
@@ -126,6 +130,7 @@ namespace TiaOpenness.Openness
         public void Disconnect()
         {
             _plcs.Clear();
+            _hmis.Clear();
             _versionControl = null;
             _versionControlOwner = null;
             _project = null;
@@ -191,6 +196,7 @@ namespace TiaOpenness.Openness
                 _versionControl = null;
                 _versionControlOwner = null;
                 _plcs.Clear();
+            _hmis.Clear();
             }
         }
 
@@ -219,7 +225,18 @@ namespace TiaOpenness.Openness
         public IReadOnlyList<BlockInfo> ListBlocks(string deviceId, bool includeSystemBlocks)
         {
             PlcContext plc;
-            if (!TryGetPlc(deviceId, out plc)) return new List<BlockInfo>();
+            if (!TryGetPlc(deviceId, out plc))
+            {
+                // An HMI panel has screens where a PLC has blocks. The same list serves both, so
+                // one device selection shows whatever that device actually contains.
+                HmiContext hmi;
+                return TryGetHmi(deviceId, out hmi)
+                    ? hmi.Items.Keys
+                        .Select(path => HmiNavigator.Describe(hmi, path))
+                        .OrderBy(i => i.Path, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                    : (IReadOnlyList<BlockInfo>)new List<BlockInfo>();
+            }
 
             var blocks = new List<BlockInfo>();
 
@@ -257,7 +274,9 @@ namespace TiaOpenness.Openness
         public ExportResult ExportBlocks(string deviceId, IReadOnlyList<string> blockPaths, string outputDirectory,
             ExportFormat format, bool preserveFolders, ProgressCallback progress)
         {
-            var plc = RequirePlc(deviceId);
+            PlcContext plc;
+            if (!TryGetPlc(deviceId, out plc)) return ExportHmi(deviceId, blockPaths, outputDirectory, preserveFolders, progress);
+
             var targets = ResolveExportTargets(plc, blockPaths);
 
             Directory.CreateDirectory(outputDirectory);
@@ -663,6 +682,7 @@ namespace TiaOpenness.Openness
         private void IndexProject()
         {
             _plcs.Clear();
+            _hmis.Clear();
         }
 
         private static void Index(PlcContext context)
@@ -788,6 +808,79 @@ namespace TiaOpenness.Openness
 
             throw new KeyNotFoundException("Device '" + deviceId + "' carries no PLC software, " +
                 "so this operation does not apply to it.");
+        }
+
+        /// <summary>
+        /// Exports HMI screens and tag tables. Same contract as the PLC path — one file per object,
+        /// folders preserved, each failure reported against the object it belongs to.
+        /// </summary>
+        private ExportResult ExportHmi(string deviceId, IReadOnlyList<string> paths, string outputDirectory,
+            bool preserveFolders, ProgressCallback progress)
+        {
+            HmiContext hmi;
+            if (!TryGetHmi(deviceId, out hmi))
+            {
+                return new ExportResult { OutputDirectory = outputDirectory };
+            }
+
+            var wanted = paths == null || paths.Count == 0
+                ? hmi.Items.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList()
+                : paths.Where(hmi.Items.ContainsKey).ToList();
+
+            Directory.CreateDirectory(outputDirectory);
+            var result = new ExportResult { OutputDirectory = outputDirectory, Requested = wanted.Count };
+
+            for (var i = 0; i < wanted.Count; i++)
+            {
+                var path = wanted[i];
+                if (progress != null) progress("export", i + 1, wanted.Count, path);
+
+                var item = new ExportedItem { BlockPath = path };
+                try
+                {
+                    var folder = hmi.Folders.TryGetValue(path, out var known) ? known : string.Empty;
+                    var directory = preserveFolders
+                        ? Path.Combine(outputDirectory, SafeFolder(folder))
+                        : outputDirectory;
+                    Directory.CreateDirectory(directory);
+
+                    var name = path.Substring(path.LastIndexOf('/') + 1);
+                    item.FilePath = HmiNavigator.Export(hmi.Items[path], directory, SafeFileName(name));
+                    item.Succeeded = true;
+                    result.Succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    item.Succeeded = false;
+                    item.Error = Flatten((ex.InnerException ?? ex).Message);
+                    result.Failed++;
+                }
+                result.Items.Add(item);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The indexed screens and tag tables of one HMI panel, built on first use like a PLC's.
+        /// False when the device carries no HMI software.
+        /// </summary>
+        private bool TryGetHmi(string deviceId, out HmiContext hmi)
+        {
+            RequireProject();
+
+            if (_hmis.TryGetValue(deviceId, out hmi)) return true;
+
+            var device = PlcNavigator.AllDevices(_project).FirstOrDefault(d =>
+                string.Equals(d.Name, deviceId, StringComparison.OrdinalIgnoreCase));
+
+            var software = device == null ? null : PlcNavigator.FindSoftware(device);
+            if (!HmiNavigator.IsHmiTarget(software)) return false;
+
+            hmi = new HmiContext { DeviceId = device.Name, Target = software };
+            HmiNavigator.Index(hmi);
+            _hmis[device.Name] = hmi;
+            return true;
         }
 
         /// <summary>

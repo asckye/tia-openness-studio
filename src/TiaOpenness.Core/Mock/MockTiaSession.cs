@@ -370,6 +370,8 @@ namespace TiaOpenness.Core.Mock
                     ArticleNumber = "6ES7 516-3FN02-0AB0",
                     FirmwareVersion = "V3.1",
                     Category = "Plc",
+                    DisplayName = "PLC_1",
+                    TypeName = "CPU 1516F-3 PN/DP",
                     GroupPath = string.Empty,
                     ItemNames = new List<string> { "PLC_1", "Rack_0" },
                 },
@@ -412,9 +414,27 @@ namespace TiaOpenness.Core.Mock
                     ArticleNumber = "6AV2 128-3GB36-0AX0",
                     FirmwareVersion = "V21",
                     Category = "Hmi",
+                    DisplayName = "HMI_1",
+                    TypeName = "TP1500 Comfort",
                     GroupPath = "Line 1",
                     ItemNames = new List<string> { "HMI_1" },
                 },
+            };
+
+            // A panel has screens where a PLC has blocks; the mock carries both so the tree and the
+            // export path are exercised for an HMI device too.
+            hmi.Blocks.AddRange(new[]
+            {
+                Screen("Screens/Start"),
+                Screen("Screens/Line/Overview"),
+                Screen("Screens/Line/Alarms"),
+                Screen("Templates/Header"),
+            });
+
+            hmi.TagTables["HMI tags"] = new List<TagInfo>
+            {
+                Tag("Motor_Run", "Bool", null, "From PLC_1", "HMI tags"),
+                Tag("Setpoint", "Real", null, null, "HMI tags"),
             };
 
             _devices.Add(plc);
@@ -437,6 +457,20 @@ namespace TiaOpenness.Core.Mock
                 ModifiedDate = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero),
                 HeaderAuthor = author,
                 HeaderVersion = "0.1",
+            };
+        }
+
+        /// <summary>An HMI screen: no number, no language, nothing to compile.</summary>
+        private static BlockInfo Screen(string path)
+        {
+            return new BlockInfo
+            {
+                Path = path,
+                FolderPath = path.LastIndexOf('/') < 0 ? string.Empty : path.Substring(0, path.LastIndexOf('/')),
+                Name = path.Substring(path.LastIndexOf('/') + 1),
+                Kind = BlockKind.HmiScreen,
+                IsConsistent = true,
+                ModifiedDate = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero),
             };
         }
 

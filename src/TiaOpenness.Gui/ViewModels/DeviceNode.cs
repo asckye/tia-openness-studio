@@ -40,10 +40,18 @@ public sealed class DeviceNode : ObservableObject
         set => Set(ref _isExpanded, value);
     }
 
-    /// <summary>What TIA shows under the name: the order number for a device, a count for a group.</summary>
-    public string Detail => Device is not null
-        ? Device.ArticleNumber ?? string.Empty
-        : "(" + Devices().Count() + ")";
+    /// <summary>The name TIA shows: the module's, not the station's.</summary>
+    public string Label => Device?.DisplayName is { Length: > 0 } display ? display : Name;
+
+    /// <summary>What TIA prints after the name: the module type in brackets, or a count for a group.</summary>
+    public string Detail
+    {
+        get
+        {
+            if (Device is null) return "(" + Devices().Count() + ")";
+            return Device.TypeName is { Length: > 0 } type ? "[" + type + "]" : Device.ArticleNumber ?? string.Empty;
+        }
+    }
 
     /// <summary>"Plc", "Hmi", "Drive" or "Other"; empty for the root and for groups.</summary>
     public string Category => Device?.Category ?? string.Empty;

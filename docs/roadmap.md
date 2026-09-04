@@ -1,4 +1,5 @@
-# Status and roadmap
+| **Block-level diff beyond text** | The workspace diff is Git's, over the exported text. A semantic or LAD diff needs an own SimaticML parser: V21's compare API is a data API that does not accept files or revisions, and its graphical comparer is internal. See [prior-art.md](prior-art.md). |
+| **Batch code generation from Excel**# Status and roadmap
 
 Against the four problem areas that were prioritised at the start.
 

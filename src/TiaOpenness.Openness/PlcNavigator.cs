@@ -92,11 +92,14 @@ namespace TiaOpenness.Openness
             var items = AllDeviceItems(device).ToList();
             var carrier = items.FirstOrDefault(i => SoftwareOf(i) != null);
             var software = carrier == null ? null : SoftwareOf(carrier);
+            var display = carrier ?? HeadModule(items, device);
 
             return new DeviceInfo
             {
                 Id = device.Name,
                 Name = device.Name,
+                DisplayName = display?.Name ?? device.Name,
+                TypeName = display?.Attr<string>("TypeName") ?? device.Attr<string>("TypeName"),
                 TypeIdentifier = device.TypeIdentifier,
                 ArticleNumber = (carrier ?? items.FirstOrDefault())?.Attr<string>("OrderNumber")
                                 ?? device.Attr<string>("OrderNumber"),
@@ -105,6 +108,26 @@ namespace TiaOpenness.Openness
                 GroupPath = entry.GroupPath ?? string.Empty,
                 ItemNames = items.Select(i => i.Name).ToList(),
             };
+        }
+
+        /// <summary>
+        /// The module whose name TIA shows for a device that carries no software — a switch, a
+        /// drive. TIA prints "SW_701 [SCALANCE X208]" where the station itself is only called
+        /// "SCALANCE X-200", so the name worth showing belongs to the head module, not the station.
+        ///
+        /// <see cref="AllDeviceItems(Device)"/> yields each top-level item before descending, so
+        /// the first entry is the head module. A station whose only item repeats the station's own
+        /// name tells us nothing, and falls back to the station.
+        /// </summary>
+        private static DeviceItem HeadModule(IReadOnlyList<DeviceItem> items, Device device)
+        {
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Name)) continue;
+                if (string.Equals(item.Name, device.Name, StringComparison.OrdinalIgnoreCase)) continue;
+                return item;
+            }
+            return null;
         }
 
         private static Software SoftwareOf(DeviceItem item)
@@ -134,7 +157,7 @@ namespace TiaOpenness.Openness
             return FindSoftware(device) as PlcSoftware;
         }
 
-        private static Software FindSoftware(Device device)
+        public static Software FindSoftware(Device device)
         {
             foreach (var item in AllDeviceItems(device))
             {

@@ -159,7 +159,7 @@
               <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                   <StackPanel Margin="0,3">
-                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis">
+                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis">
                       <TextBlock.Style>
                         <Style TargetType="TextBlock">
                           <Setter Property="FontWeight" Value="Bold" />
@@ -362,8 +362,17 @@
                   </Grid.ColumnDefinitions>
                   <TextBlock Text="{l:Tr Vc.Workspace}" Style="{StaticResource Ui.Text.Secondary}"
                              Margin="0,0,12,0" />
+                  <!-- An explicit template rather than DisplayMemberPath: the closed box renders
+                       SelectionBoxItem through SelectionBoxItemTemplate, and with only a display
+                       path it fell back to ToString() and showed the type name. -->
                   <ComboBox Grid.Column="1" ItemsSource="{Binding Workspaces}"
-                            SelectedItem="{Binding SelectedWorkspace}" DisplayMemberPath="Name" />
+                            SelectedItem="{Binding SelectedWorkspace}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
                   <Button Grid.Column="2" Content="{l:Tr Common.Reload}" Command="{Binding VcRefresh}"
                           Margin="12,0,0,0" />
                 </Grid>
@@ -425,8 +434,19 @@
                            TextWrapping="Wrap" LineHeight="24" />
               </StackPanel>
 
-              <DataGrid ItemsSource="{Binding VcStatusItems}" IsReadOnly="True"
-                        Visibility="{Binding HasVcItems, Converter={StaticResource BoolToVisibility}}">
+              <!-- The list of what differs, and under it what actually changed. The diff comes
+                   from Git in the workspace folder, so it only says anything after a push - which
+                   is precisely when it is worth reading, in the moment before committing. -->
+              <Grid Visibility="{Binding HasVcItems, Converter={StaticResource BoolToVisibility}}">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="*" MinHeight="120" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" MinHeight="120" />
+                </Grid.RowDefinitions>
+
+                <DataGrid Grid.Row="0" ItemsSource="{Binding VcStatusItems}" IsReadOnly="True"
+                          SelectedItem="{Binding SelectedVcItem}"
+                          Visibility="{Binding HasVcItems, Converter={StaticResource BoolToVisibility}}">
                 <DataGrid.Columns>
                   <DataGridTextColumn Binding="{Binding CompareState}" Width="190">
                     <DataGridTextColumn.Header>
@@ -460,7 +480,61 @@
                     </DataGridTextColumn.Header>
                   </DataGridTextColumn>
                 </DataGrid.Columns>
-              </DataGrid>
+                </DataGrid>
+
+                <Border Grid.Row="1" Height="1" Margin="0,10"
+                        Background="{DynamicResource Ui.Separator}" />
+
+                <DockPanel Grid.Row="2">
+                  <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Run Text="{l:Tr Vc.Diff}" FontWeight="SemiBold" />
+                    <Run Text="{Binding VcDiffCaption, Mode=OneWay}"
+                         Foreground="{DynamicResource Ui.SecondaryLabel}" />
+                  </TextBlock>
+
+                  <TextBlock Text="{l:Tr Vc.Diff.Empty}" Style="{StaticResource Ui.Text.Caption}"
+                             TextWrapping="Wrap" VerticalAlignment="Top"
+                             Visibility="{Binding HasVcDiff, Converter={StaticResource NotBoolToVisibility}}" />
+
+                  <ListBox ItemsSource="{Binding VcDiffLines}" BorderThickness="0"
+                           Background="{DynamicResource Ui.CodeBackground}"
+                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                           Visibility="{Binding HasVcDiff, Converter={StaticResource BoolToVisibility}}">
+                    <ListBox.ItemContainerStyle>
+                      <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                      </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Text}">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Ui.Text.Mono}">
+                              <Setter Property="Foreground" Value="{DynamicResource Ui.Label}" />
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding Kind}" Value="Added">
+                                  <Setter Property="Foreground" Value="{DynamicResource Ui.Green}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Removed">
+                                  <Setter Property="Foreground" Value="{DynamicResource Ui.Red}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Hunk">
+                                  <Setter Property="Foreground" Value="{DynamicResource Ui.AccentText}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Kind}" Value="Header">
+                                  <Setter Property="Foreground" Value="{DynamicResource Ui.TertiaryLabel}" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </DockPanel>
+              </Grid>
             </Grid>
           </DockPanel>
         </Border>

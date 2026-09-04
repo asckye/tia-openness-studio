@@ -82,6 +82,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _vcDryRun = true;
     private bool _vcShowAll;
     private WorkspaceInfo? _selectedWorkspace;
+    private MappedObjectInfo? _selectedVcItem;
+    private string _vcDiffCaption = string.Empty;
     private string _newWorkspaceName = "git";
     private string _newWorkspaceFolder = string.Empty;
 
@@ -174,6 +176,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<WorkspaceInfo> Workspaces { get; } = [];
     public ObservableCollection<MappedObjectInfo> VcStatusItems { get; } = [];
+
+    /// <summary>The selected object's uncommitted change, as Git sees it.</summary>
+    public ObservableCollection<DiffLine> VcDiffLines { get; } = [];
 
     public AsyncCommand RunDoctor { get; }
     public AsyncCommand Connect { get; }
@@ -322,6 +327,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _vcSupported;
         private set { if (Set(ref _vcSupported, value)) RaiseVcCommands(); }
     }
+
+    /// <summary>
+    /// Selecting a changed object loads its diff. The comparison is against the files, so it only
+    /// says anything after a push - which is exactly when it is worth reading, just before commit.
+    /// </summary>
+    public MappedObjectInfo? SelectedVcItem
+    {
+        get => _selectedVcItem;
+        set
+        {
+            if (!Set(ref _selectedVcItem, value)) return;
+            Raise(nameof(HasVcDiff));
+            _ = LoadVcDiffAsync();
+        }
+    }
+
+    public bool HasVcDiff => VcDiffLines.Count > 0;
+
+    public string VcDiffCaption { get => _vcDiffCaption; private set => Set(ref _vcDiffCaption, value); }
 
     public WorkspaceInfo? SelectedWorkspace
     {
@@ -807,12 +831,58 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await LoadVcStatusAsync();
     });
 
+    /// <summary>
+    /// Loads the selected object's diff. Failures land in the caption rather than as an error
+    /// dialog: no Git, or a workspace folder that is not a repository, is a normal state for
+    /// someone who has not set that up, not something that went wrong.
+    /// </summary>
+    private async Task LoadVcDiffAsync()
+    {
+        VcDiffLines.Clear();
+        Raise(nameof(HasVcDiff));
+
+        if (SelectedVcItem is null)
+        {
+            VcDiffCaption = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var diff = await _client.VcDiffAsync(SelectedWorkspace?.Name, SelectedVcItem.FilePath);
+
+            if (!diff.Available)
+            {
+                VcDiffCaption = diff.Detail ?? string.Empty;
+                return;
+            }
+
+            foreach (var line in diff.Lines) VcDiffLines.Add(line);
+
+            VcDiffCaption = VcDiffLines.Count > 0
+                ? SelectedVcItem.Name
+                : Loc.Current.T("Vc.Diff.Unchanged", SelectedVcItem.Name);
+        }
+        catch (Exception ex)
+        {
+            VcDiffCaption = ex.Message;
+        }
+        finally
+        {
+            Raise(nameof(HasVcDiff));
+        }
+    }
+
     private async Task LoadVcStatusAsync()
     {
         var report = await _client.VcStatusAsync(SelectedWorkspace?.Name, changedOnly: !VcShowAll);
 
         VcStatusItems.Clear();
         foreach (var item in report.Items) VcStatusItems.Add(item);
+
+        // Show the first change straight away. The question after a status is always "what
+        // changed", and answering it should not need a second click.
+        SelectedVcItem = VcStatusItems.FirstOrDefault();
 
         if (report.InSync) SetStatus("Status.VcInSync", report.Total);
         else SetStatus("Status.VcDiffer", report.Total, report.Differing);

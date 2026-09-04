@@ -89,9 +89,19 @@ namespace TiaOpenness.Contracts.Models
     /// <summary>A device (PLC station, HMI, drive) in the project tree.</summary>
     public class DeviceInfo
     {
-        /// <summary>Stable address used by later calls, e.g. "PLC_1".</summary>
+        /// <summary>Stable address used by later calls. The station name, which never changes shape.</summary>
         public string Id { get; set; }
         public string Name { get; set; }
+
+        /// <summary>
+        /// What TIA shows in its project tree: the name of the module that carries the software,
+        /// not the station. A station is called "S71500/ET200MP-Station_1" while the CPU inside it
+        /// is called "FA3572", and it is the CPU name an engineer recognises.
+        /// </summary>
+        public string DisplayName { get; set; }
+
+        /// <summary>The type TIA prints in brackets after the name, e.g. "CPU 1517F-3 PN/DP".</summary>
+        public string TypeName { get; set; }
         public string TypeIdentifier { get; set; }
         public string ArticleNumber { get; set; }
         public string FirmwareVersion { get; set; }

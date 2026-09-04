@@ -112,6 +112,7 @@ namespace TiaOpenness.Contracts.Rpc
         public const string VcMapProject = "vc.map";
         public const string VcStatus = "vc.status";
         public const string VcSync = "vc.sync";
+        public const string VcDiff = "vc.diff";
 
         /// <summary>Builds the Openness adapter against the local TIA installation.</summary>
         public const string OpennessBuild = "openness.build";

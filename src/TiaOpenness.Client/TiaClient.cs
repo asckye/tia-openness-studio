@@ -169,6 +169,16 @@ namespace TiaOpenness.Client
         /// Synchronizes a workspace. Defaults to a dry run because
         /// <see cref="SyncDirection.WorkspaceToProject"/> overwrites blocks in the open project.
         /// </summary>
+        /// <summary>
+        /// The workspace's uncommitted changes as Git sees them. Meaningful after a push: until
+        /// then the project has changed but the files have not.
+        /// </summary>
+        public Task<WorkspaceDiff> VcDiffAsync(string workspaceName = null, string file = null,
+            CancellationToken ct = default)
+        {
+            return _bridge.CallAsync<WorkspaceDiff>(RpcMethods.VcDiff, new { workspaceName, file }, ct);
+        }
+
         public Task<SyncResult> VcSyncAsync(string workspaceName = null,
             SyncDirection direction = SyncDirection.ProjectToWorkspace, bool dryRun = true,
             CancellationToken ct = default)

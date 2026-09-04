@@ -88,6 +88,7 @@ internal static class Strings
         ("Tree.ProgramBlocks",         "Program blocks", "程序块"),
         ("Tree.DataTypes",             "PLC data types", "PLC 数据类型"),
         ("Tree.Tags",                  "PLC tags", "PLC 变量"),
+        ("Tree.HmiScreens",            "Screens", "画面"),
 
         // ---- version control -------------------------------------------------------
         ("Vc.Workspace",               "Workspace", "工作区"),
@@ -118,6 +119,11 @@ internal static class Strings
         ("Col.State",                  "State", "状态"),
         ("Col.Object",                 "Object", "对象"),
         ("Col.Format",                 "Format", "格式"),
+        ("Vc.Diff",                    "Change", "改动"),
+        ("Vc.Diff.Empty",              "Select a changed object to see what it changed. The comparison is against the files, so push first.",
+                                       "选中一个有差异的对象即可查看改动内容。比较的是文件,所以要先推送。"),
+        ("Vc.Diff.Unchanged",          "{0}: no uncommitted change in the workspace file.",
+                                       "{0}:工作区文件没有未提交的改动。"),
 
         // ---- log -------------------------------------------------------------------
         ("Log.Title",                  "Log", "日志"),

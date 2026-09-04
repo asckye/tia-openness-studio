@@ -135,6 +135,7 @@ public sealed class BlockNode : ObservableObject
     {
         BlockKind.UDT => 1,
         BlockKind.TagTable => 2,
+        BlockKind.HmiScreen => 3,
         _ => 0,
     };
 
@@ -146,6 +147,7 @@ public sealed class BlockNode : ObservableObject
     {
         1 => Loc.Current["Tree.DataTypes"],
         2 => Loc.Current["Tree.Tags"],
+        3 => Loc.Current["Tree.HmiScreens"],
         _ => Loc.Current["Tree.ProgramBlocks"],
     };
 

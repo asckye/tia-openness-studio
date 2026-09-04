@@ -7,6 +7,7 @@ using TiaOpenness.Contracts.Models;
 using TiaOpenness.Contracts.Rpc;
 using TiaOpenness.Core.Abstractions;
 using TiaOpenness.Core.Environment;
+using TiaOpenness.Core.Inspection;
 
 namespace TiaOpenness.Bridge
 {
@@ -244,6 +245,9 @@ namespace TiaOpenness.Bridge
                         Bool(p, "dryRun", true),
                         Progress);
 
+                case RpcMethods.VcDiff:
+                    return Diff(Str(p, "workspaceName", null), Str(p, "file", null));
+
                 case RpcMethods.VcStatus:
                     return VersionControl().GetStatus(Str(p, "workspaceName", null), Bool(p, "changedOnly", true));
 
@@ -294,6 +298,28 @@ namespace TiaOpenness.Bridge
         {
             if (_session == null) throw new InvalidOperationException("Not connected. Call session.connect first.");
             return _session;
+        }
+
+        /// <summary>
+        /// Reads the workspace's uncommitted changes. The workspace is resolved through version
+        /// control rather than taken from the caller, so the diff always belongs to the workspace
+        /// the operator is actually looking at.
+        /// </summary>
+        private WorkspaceDiff Diff(string workspaceName, string file)
+        {
+            var workspaces = VersionControl().ListWorkspaces();
+
+            var workspace = string.IsNullOrWhiteSpace(workspaceName)
+                ? workspaces.FirstOrDefault()
+                : workspaces.FirstOrDefault(w =>
+                    string.Equals(w.Name, workspaceName, StringComparison.OrdinalIgnoreCase));
+
+            if (workspace == null)
+            {
+                throw new InvalidOperationException("This project has no version control workspace yet.");
+            }
+
+            return GitWorkspaceDiff.Read(workspace.Name, workspace.RootPath, file);
         }
 
         /// <summary>

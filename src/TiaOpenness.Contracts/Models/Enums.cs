@@ -11,6 +11,9 @@ namespace TiaOpenness.Contracts.Models
         InstanceDB = 5,
         UDT = 6,
         TagTable = 7,
+
+        /// <summary>An HMI screen, template, popup or slide-in.</summary>
+        HmiScreen = 8,
     }
 
     /// <summary>Export flavour requested from the bridge.</summary>
