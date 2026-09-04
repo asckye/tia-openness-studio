@@ -71,7 +71,7 @@ namespace TiaOpenness.Core.Abstractions
                        "the adapter against your installation and needs no .NET SDK.";
             }
 
-            return "On a machine with TIA Portal, run tools\fetch-openness-dlls.ps1 and rebuild the solution.";
+            return @"On a machine with TIA Portal, run tools\fetch-openness-dlls.ps1 and rebuild the solution.";
         }
 
         /// <summary>Returns null when the real backend cannot be used; <see cref="LastDecision"/> says why.</summary>

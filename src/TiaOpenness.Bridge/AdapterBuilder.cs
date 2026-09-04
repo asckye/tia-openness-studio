@@ -25,9 +25,34 @@ namespace TiaOpenness.Bridge
     /// this build expects but that this TIA version lacks comes back as a compiler error naming a
     /// file and line - a usable bug report instead of a failure hours later on one code path.
     /// </summary>
-    internal static class AdapterBuilder
+    public static class AdapterBuilder
     {
         private const string AdapterAssembly = "TiaOpenness.Openness.dll";
+
+        /// <summary>
+        /// True when building is both possible and worth attempting here: the adapter is missing,
+        /// the payload was unpacked, and there is a TIA Portal to compile against.
+        /// </summary>
+        public static bool CanBuild()
+        {
+            try
+            {
+                var bridgeDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (string.IsNullOrEmpty(bridgeDirectory)) return false;
+                if (File.Exists(Path.Combine(bridgeDirectory, AdapterAssembly))) return false;
+
+                var payloadRoot = Path.GetDirectoryName(bridgeDirectory);
+                if (payloadRoot == null) return false;
+
+                return File.Exists(Path.Combine(payloadRoot, "compiler", "csc.exe"))
+                    && Directory.Exists(Path.Combine(payloadRoot, "adapter"))
+                    && OpennessLocator.FindAll().Count > 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
         public static AdapterBuildResult Build(string opennessVersion)
         {

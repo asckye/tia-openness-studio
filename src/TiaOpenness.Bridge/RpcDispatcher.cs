@@ -15,6 +15,7 @@ namespace TiaOpenness.Bridge
     {
         private readonly Func<ITiaSessionFactory> _resolveFactory;
         private ITiaSessionFactory _factory;
+        private bool _adapterBuildAttempted;
         private readonly Action<RpcNotification> _notify;
         private readonly JsonSerializer _serializer;
         private ITiaSession _session;
@@ -48,12 +49,59 @@ namespace TiaOpenness.Bridge
             var previous = SessionFactoryLoader.LastDecision;
             _factory = _resolveFactory();
 
+            if (_factory is UnavailableSessionFactory) _factory = BuildAdapterAndRetry();
+
             if (!(_factory is UnavailableSessionFactory) && previous != SessionFactoryLoader.LastDecision)
             {
                 Console.Error.WriteLine("[bridge] backend now available: " + SessionFactoryLoader.LastDecision);
                 Console.Error.Flush();
             }
             return _factory;
+        }
+
+        /// <summary>
+        /// Builds the Openness adapter if that is the only thing missing, then resolves again.
+        ///
+        /// The adapter cannot ship prebuilt, so on a machine with TIA Portal the first connect
+        /// would otherwise always fail with "press Enable Openness" - and again after every update,
+        /// because each version unpacks its own payload and its own adapter sources. Building takes
+        /// a few seconds, writes only into this application's folder and touches no TIA project, so
+        /// it is not worth making anyone discover a button for.
+        ///
+        /// Only ever attempted once per bridge: a failed build is a compile error against this TIA
+        /// version, and retrying it on every call would bury the session in identical noise.
+        /// </summary>
+        private ITiaSessionFactory BuildAdapterAndRetry()
+        {
+            if (_adapterBuildAttempted || !AdapterBuilder.CanBuild()) return _factory;
+            _adapterBuildAttempted = true;
+
+            Console.Error.WriteLine("[bridge] the Openness adapter is not built for this version yet; building it now");
+            Console.Error.Flush();
+
+            try
+            {
+                var result = AdapterBuilder.Build(null);
+                if (!result.Succeeded)
+                {
+                    Console.Error.WriteLine("[bridge] the adapter did not compile against V" +
+                                            result.OpennessVersion + ":");
+                    foreach (var error in result.Errors.Take(10)) Console.Error.WriteLine("[bridge]   " + error);
+                    Console.Error.Flush();
+                    return _factory;
+                }
+
+                Console.Error.WriteLine("[bridge] built the adapter against V" + result.OpennessVersion +
+                                        " (" + result.ReferencedAssemblies + " Siemens assemblies)");
+                Console.Error.Flush();
+                return _resolveFactory();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("[bridge] could not build the adapter: " + ex.Message);
+                Console.Error.Flush();
+                return _factory;
+            }
         }
 
         public RpcResponse Handle(RpcRequest request)
